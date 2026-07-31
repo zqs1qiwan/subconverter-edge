@@ -1,7 +1,142 @@
-/* Kumo standalone CSS includes Tailwind + all component styles */
-/* This file is for minimal overrides only */
+/* Kumo standalone CSS is imported in App.tsx */
+/* This file provides layout + dark theme overrides */
 
 body {
   background: #121212;
   color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.app-content {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.app-header {
+  text-align: center;
+  padding-top: 2.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.sub-title { margin-top: 0.25rem; }
+
+.form-card {
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.6);
+  font-weight: 500;
+}
+
+.field-row {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Native select styled to match dark theme */
+.native-select-wrapper {
+  position: relative;
+}
+
+.native-select {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: #fff;
+  padding: 0.6rem 2rem 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.native-select:focus { border-color: #6366f1; }
+.native-select option { background: #1e1e1e; color: #fff; }
+
+.checkbox-row { display: flex; align-items: center; }
+
+.actions-row { display: flex; gap: 0.75rem; }
+
+.url-box {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  word-break: break-all;
+}
+
+.url-box code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: #818cf8;
+}
+
+.error-box { display: flex; }
+
+.result-pre {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 0.8rem;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255,255,255,0.7);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.truncate-note {
+  text-align: center;
+  padding: 0.5rem;
+  opacity: 0.5;
+}
+
+.app-footer {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+  padding-bottom: 2rem;
+}
+
+.app-footer a {
+  color: rgba(255,255,255,0.4);
+  text-decoration: none;
+  font-size: 0.8rem;
+  transition: color 0.2s;
+}
+
+.app-footer a:hover { color: #818cf8; }
+
+@media (max-width: 600px) {
+  .field-row { flex-direction: column; gap: 0.75rem; }
+  .actions-row { flex-direction: column; }
 }

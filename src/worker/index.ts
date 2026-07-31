@@ -80,13 +80,13 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
     }
     try {
       const resp = await fetch(trimmed, {
-        headers: { 'User-Agent': 'ClashForAndroid/2.5.12' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       });
       const content = await resp.text();
       const result = parseSubscription(content, resp.headers.get('content-type') || '');
       allNodes.push(...result.nodes);
       if (result.subInfo && !subInfo) subInfo = result.subInfo;
-    } catch (e) {
+    } catch {
       // 忽略单个订阅失败
     }
   }

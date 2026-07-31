@@ -3,13 +3,12 @@ import type { ProxyNode, ParseResult, SubscriptionInfo } from './types';
 // Base64 解码
 function base64Decode(str: string): string {
   try {
-    // 先做 URL decode (处理 %3D 等)
-    let s = str;
-    try { s = decodeURIComponent(s); } catch {}
     // URL-safe base64 -> standard
-    const padded = s.replace(/-/g, '+').replace(/_/g, '/');
-    const pad = padded.length % 4;
-    const b64 = pad ? padded + '='.repeat(4 - pad) : padded;
+    let s = str.replace(/-/g, '+').replace(/_/g, '/');
+    // Remove whitespace/newlines
+    s = s.replace(/\s/g, '');
+    const pad = s.length % 4;
+    const b64 = pad ? s + '='.repeat(4 - pad) : s;
     return atob(b64);
   } catch {
     return str;
@@ -168,12 +167,31 @@ function parseTrojan(uri: string): ProxyNode | null {
   }
 }
 
+// Hysteria2 URI: hysteria2://password@server:port?params#name
+function parseHysteria2(uri: string): ProxyNode | null {
+  try {
+    const u = new URL(uri);
+    const name = decodeURIComponent(u.hash.slice(1)) || 'Hysteria2';
+    const params = u.searchParams;
+    return {
+      type: 'hysteria2', name, server: u.hostname, port: parseInt(u.port, 10),
+      password: u.username,
+      tls: true,
+      sni: params.get('sni') || u.hostname,
+      host: params.get('host') || '',
+      raw: uri,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // 主解析函数
 export function parseSubscription(content: string, contentType: string): ParseResult {
   let text = content.trim();
 
   // 如果是 base64 编码的整个订阅
-  if (!text.startsWith('{') && !text.startsWith('[') && !text.startsWith('#') && !text.startsWith('proxies:')) {
+  if (!text.startsWith('{') && !text.startsWith('[') && !text.startsWith('#') && !text.startsWith('proxies:') && !text.includes('://')) {
     const decoded = base64Decode(text);
     if (decoded.includes('://')) {
       text = decoded;
@@ -185,8 +203,8 @@ export function parseSubscription(content: string, contentType: string): ParseRe
     return parseClashYaml(text);
   }
 
-  // 按行解析 URI
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  // 按行解析 URI (清理 \r\n)
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
   const nodes: ProxyNode[] = [];
 
   for (const line of lines) {
@@ -196,6 +214,7 @@ export function parseSubscription(content: string, contentType: string): ParseRe
     else if (line.startsWith('vmess://')) node = parseVMess(line);
     else if (line.startsWith('vless://')) node = parseVLESS(line);
     else if (line.startsWith('trojan://')) node = parseTrojan(line);
+    else if (line.startsWith('hysteria2://') || line.startsWith('hy2://')) node = parseHysteria2(line);
     if (node) nodes.push(node);
   }
 

@@ -60,6 +60,12 @@ export function toClash(nodes: ProxyNode[]): string {
         }
         p.udp = true;
         break;
+      case 'hysteria2':
+        p.password = n.password;
+        p.sni = n.sni || n.server;
+        p['skip-cert-verify'] = false;
+        p.udp = true;
+        break;
     }
     proxies.push(`- ${JSON.stringify(p).replace(/"/g, '').replace(/,/g, ', ').replace(/:/g, ': ')}`);
   }
@@ -109,6 +115,10 @@ export function toSingBox(nodes: ProxyNode[]): string {
       case 'ssr':
         // Sing-Box 不支持 SSR，跳过
         continue;
+      case 'hysteria2':
+        ob.password = n.password;
+        ob.tls = { enabled: true, server_name: n.sni || n.server };
+        break;
     }
     outbounds.push(ob);
   }
@@ -161,6 +171,13 @@ export function toV2Ray(nodes: ProxyNode[]): string {
         if (n.path) params.set('path', n.path);
         if (n.host) params.set('host', n.host);
         lines.push(`vless://${n.uuid}@${n.server}:${n.port}?${params.toString()}#${encodeURIComponent(n.name)}`);
+        break;
+      }
+      case 'hysteria2': {
+        const params = new URLSearchParams();
+        if (n.sni) params.set('sni', n.sni);
+        params.set('security', 'tls');
+        lines.push(`hysteria2://${n.password}@${n.server}:${n.port}?${params.toString()}#${encodeURIComponent(n.name)}`);
         break;
       }
     }
@@ -223,6 +240,13 @@ export function toMixed(nodes: ProxyNode[]): string {
         if (n.path) params.set('path', n.path);
         if (n.host) params.set('host', n.host);
         lines.push(`vless://${n.uuid}@${n.server}:${n.port}?${params.toString()}#${encodeURIComponent(n.name)}`);
+        break;
+      }
+      case 'hysteria2': {
+        const params = new URLSearchParams();
+        if (n.sni) params.set('sni', n.sni);
+        params.set('security', 'tls');
+        lines.push(`hysteria2://${n.password}@${n.server}:${n.port}?${params.toString()}#${encodeURIComponent(n.name)}`);
         break;
       }
     }
