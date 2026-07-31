@@ -1,0 +1,16 @@
+name = "subconverter-edge"
+main = "src/worker/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
+[[routes]]
+pattern = "sub.laobaitv.net/*"
+zone_name = "laobaitv.net"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
