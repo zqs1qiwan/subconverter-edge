@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import './styles.css';
+import { Button, Input, Select, Field, Checkbox, Badge, Text, Surface, Loader } from '@cloudflare/kumo';
+import '@cloudflare/kumo/styles/standalone';
 
 const TARGETS = [
   { value: 'clash', label: 'Clash' },
@@ -69,92 +70,110 @@ export default function App() {
   const generatedUrl = generateUrl();
 
   return (
-    <div className="app">
-      <header className="header">
-        <h1>订阅转换</h1>
-        <p>sub.laobaitv.net — Cloudflare Edge</p>
-      </header>
+    <Surface className="min-h-screen flex flex-col items-center p-4">
+      <div className="w-full max-w-2xl flex flex-col gap-6">
+        <div className="text-center pt-8 pb-2">
+          <Text variant="heading1" as="h1">订阅转换</Text>
+          <Text variant="secondary" size="sm" as="p" DANGEROUS_className="mt-1">
+            sub.laobaitv.net — Cloudflare Edge
+          </Text>
+        </div>
 
-      <main className="main">
-        <div className="card">
-          <div className="field">
-            <label>订阅链接</label>
-            <input
-              type="text"
+        <Surface className="p-6 flex flex-col gap-5 rounded-xl border border-white/10">
+          <Field label="订阅链接">
+            <Input
               value={subUrl}
-              onChange={(e) => setSubUrl(e.target.value)}
+              onChange={(e: any) => setSubUrl(e.target.value)}
               placeholder="https://example.com/sub"
+            />
+          </Field>
+
+          <div className="flex gap-4 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
+              <Field label="生成类型">
+                <Select
+                  value={target}
+                  onValueChange={(val: string | null) => setTarget(val || "clash")}
+                  items={TARGETS.map(t => ({ label: t.label, value: t.value }))}
+                />
+              </Field>
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <Field label="后端地址">
+                <Select
+                  value={backend}
+                  onValueChange={(val: string | null) => setBackend(val || "")}
+                  items={BACKEND_OPTIONS.map(b => ({ label: b.label, value: b.value }))}
+                />
+              </Field>
+            </div>
+          </div>
+
+          <div className="flex gap-4 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
+              <Field label="包含节点 (选填)">
+                <Input value={include} onChange={(e: any) => setInclude(e.target.value)} placeholder="ss,vmess" />
+              </Field>
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <Field label="排除节点 (选填)">
+                <Input value={exclude} onChange={(e: any) => setExclude(e.target.value)} placeholder="ssr" />
+              </Field>
+            </div>
+          </div>
+
+          <div>
+            <Checkbox
+              checked={emoji}
+              onCheckedChange={(e: any) => setEmoji(!!e.checked)}
+              label="启用 Emoji"
             />
           </div>
 
-          <div className="row">
-            <div className="field">
-              <label>生成类型</label>
-              <select value={target} onChange={(e) => setTarget(e.target.value)}>
-                {TARGETS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-
-            <div className="field">
-              <label>后端地址</label>
-              <select value={backend} onChange={(e) => setBackend(e.target.value)}>
-                {BACKEND_OPTIONS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="row">
-            <div className="field">
-              <label>包含节点 (选填)</label>
-              <input type="text" value={include} onChange={(e) => setInclude(e.target.value)} placeholder="ss,vmess" />
-            </div>
-            <div className="field">
-              <label>排除节点 (选填)</label>
-              <input type="text" value={exclude} onChange={(e) => setExclude(e.target.value)} placeholder="ssr" />
-            </div>
-          </div>
-
-          <div className="checkbox">
-            <label>
-              <input type="checkbox" checked={emoji} onChange={(e) => setEmoji(e.target.checked)} />
-              <span>启用 Emoji</span>
-            </label>
-          </div>
-
-          <div className="actions">
-            <button className="btn-primary" onClick={handleGenerate} disabled={loading}>
-              {loading ? '生成中...' : '生成订阅链接'}
-            </button>
-            <button className="btn-secondary" onClick={handleCopy} disabled={!generatedUrl}>
+          <div className="flex gap-3">
+            <Button variant="primary" onClick={handleGenerate} disabled={loading || !subUrl.trim()}>
+              {loading ? <Loader size="sm" /> : '生成订阅链接'}
+            </Button>
+            <Button variant="secondary" onClick={handleCopy} disabled={!generatedUrl}>
               {copied ? '已复制' : '复制链接'}
-            </button>
+            </Button>
           </div>
 
           {generatedUrl && (
-            <div className="output-url">
-              <label>订阅地址</label>
-              <div className="url-box">
-                <code>{generatedUrl}</code>
-              </div>
+            <div className="flex flex-col gap-2">
+              <Field label="订阅地址">
+                <Surface className="p-3 break-all rounded-lg bg-white/5 border border-white/10">
+                  <code className="text-sm text-indigo-400 font-mono">{generatedUrl}</code>
+                </Surface>
+              </Field>
             </div>
           )}
 
-          {error && <div className="error">{error}</div>}
+          {error && (
+            <Badge variant="red">{error}</Badge>
+          )}
 
           {result && (
-            <div className="result">
-              <label>转换结果</label>
-              <pre>{result.slice(0, 5000)}</pre>
-              {result.length > 5000 && <p className="truncated">... (已截断，共 {result.length} 字符)</p>}
+            <div className="flex flex-col gap-2">
+              <Field label="转换结果">
+                <pre className="bg-black/30 border border-white/10 rounded-lg p-4 text-sm overflow-auto max-h-96 font-mono text-gray-300">
+                  {result.slice(0, 5000)}
+                </pre>
+              </Field>
+              {result.length > 5000 && (
+                <Text variant="secondary" size="sm" as="p" DANGEROUS_className="text-center">
+                  ... (已截断，共 {result.length} 字符)
+                </Text>
+              )}
             </div>
           )}
-        </div>
-      </main>
+        </Surface>
 
-      <footer className="footer">
-        <a href="https://github.com/zqs1qiwan/subconverter-edge" target="_blank" rel="noopener">GitHub</a>
-        <span>© LaobaiTools</span>
-      </footer>
-    </div>
+        <div className="flex justify-center items-center gap-4 py-4 text-sm opacity-50">
+          <a href="https://github.com/zqs1qiwan/subconverter-edge" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <span>© LaobaiTools</span>
+        </div>
+      </div>
+    </Surface>
   );
 }
