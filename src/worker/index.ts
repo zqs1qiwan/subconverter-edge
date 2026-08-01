@@ -73,7 +73,7 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   for (const u of urls) {
     const trimmed = u.trim();
     // 如果是节点 URI (不以 http 开头)，直接当内容解析
-    if (trimmed.startsWith('ss://') || trimmed.startsWith('ssr://') || trimmed.startsWith('vmess://') || trimmed.startsWith('vless://') || trimmed.startsWith('trojan://')) {
+    if (trimmed.startsWith('ss://') || trimmed.startsWith('ssr://') || trimmed.startsWith('vmess://') || trimmed.startsWith('vless://') || trimmed.startsWith('trojan://') || trimmed.startsWith('hysteria2://') || trimmed.startsWith('hy2://')) {
       const result = parseSubscription(trimmed, 'text/plain');
       allNodes.push(...result.nodes);
       continue;
