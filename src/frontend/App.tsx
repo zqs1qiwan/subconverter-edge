@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Button, Input, Checkbox, Badge, Text, Surface, Loader } from '@cloudflare/kumo';
+import { Button, Input, Checkbox, Badge, Text, Loader } from '@cloudflare/kumo';
 import '@cloudflare/kumo/styles/standalone';
 import './styles.css';
 
@@ -29,6 +29,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // 生成完整的订阅 URL，始终使用当前页面 origin 作为默认后端
   const generateUrl = useCallback(() => {
     if (!subUrl.trim()) return '';
     const params = new URLSearchParams();
@@ -37,7 +38,8 @@ export default function App() {
     if (!emoji) params.set('emoji', 'false');
     if (include) params.set('include', include);
     if (exclude) params.set('exclude', exclude);
-    const base = backend || '';
+    // backend 为空时用本站后端（当前 origin）
+    const base = backend || window.location.origin;
     return `${base}/sub?${params.toString()}`;
   }, [subUrl, target, backend, emoji, include, exclude]);
 
@@ -71,7 +73,7 @@ export default function App() {
   const generatedUrl = generateUrl();
 
   return (
-    <Surface className="app-container">
+    <div className="app-container">
       <div className="app-content">
         <div className="app-header">
           <Text variant="heading1" as="h1">订阅转换</Text>
@@ -80,10 +82,11 @@ export default function App() {
           </Text>
         </div>
 
-        <Surface className="form-card">
+        <div className="form-card">
           <div className="field-group">
             <label className="field-label">订阅链接</label>
             <Input
+              name="subUrl"
               value={subUrl}
               onChange={(e: any) => setSubUrl(e.target.value)}
               placeholder="https://example.com/sub"
@@ -171,12 +174,12 @@ export default function App() {
               )}
             </div>
           )}
-        </Surface>
+        </div>
 
         <div className="app-footer">
           <a href="https://github.com/zqs1qiwan/subconverter-edge" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
       </div>
-    </Surface>
+    </div>
   );
 }

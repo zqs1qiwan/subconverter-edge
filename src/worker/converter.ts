@@ -1,6 +1,33 @@
 import type { ProxyNode, TargetType } from './types';
 
 // Clash YAML 输出
+function yamlValue(val: any): string {
+  if (val === null || val === undefined) return 'null';
+  if (typeof val === 'boolean') return val ? 'true' : 'false';
+  if (typeof val === 'number') return String(val);
+  if (typeof val === 'object') return JSON.stringify(val);
+  // 字符串：含特殊字符需引号
+  const s = String(val);
+  if (/[:,#\[\]{}&*!|>'"%@`]/.test(s) || s.includes('\n') || s.trim() !== s) {
+    return `"${s.replace(/"/g, '\\"')}"`;
+  }
+  return s;
+}
+
+function objToYaml(obj: Record<string, any>): string {
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined || v === null) continue;
+    if (typeof v === 'object' && !Array.isArray(v)) {
+      const inner = Object.entries(v).map(([ik, iv]) => `${ik}: ${yamlValue(iv)}`).join(', ');
+      parts.push(`${k}: {${inner}}`);
+    } else {
+      parts.push(`${k}: ${yamlValue(v)}`);
+    }
+  }
+  return `{${parts.join(', ')}}`;
+}
+
 export function toClash(nodes: ProxyNode[]): string {
   const proxies: string[] = [];
   for (const n of nodes) {
@@ -18,7 +45,6 @@ export function toClash(nodes: ProxyNode[]): string {
         p.network = n.network || 'tcp';
         p.tls = n.tls || false;
         if (n.sni) p.sni = n.sni;
-        if (n.host) p['skip-cert-verify'] = false;
         if (n.network === 'ws') {
           p['ws-opts'] = { path: n.path || '/', headers: { Host: n.host || n.server } };
         }
@@ -63,11 +89,11 @@ export function toClash(nodes: ProxyNode[]): string {
       case 'hysteria2':
         p.password = n.password;
         p.sni = n.sni || n.server;
-        p['skip-cert-verify'] = false;
+        p['skip-cert-verify'] = n.insecure || false;
         p.udp = true;
         break;
     }
-    proxies.push(`- ${JSON.stringify(p).replace(/"/g, '').replace(/,/g, ', ').replace(/:/g, ': ')}`);
+    proxies.push(`- ${objToYaml(p)}`);
   }
 
   return `proxies:\n${proxies.join('\n')}\n\nproxy-groups:\n- name: PROXY\n  type: select\n  proxies:\n  - DIRECT\n${nodes.map(n => `  - "${n.name}"`).join('\n')}\n\nrules:\n- MATCH,PROXY\n`;
@@ -118,6 +144,7 @@ export function toSingBox(nodes: ProxyNode[]): string {
       case 'hysteria2':
         ob.password = n.password;
         ob.tls = { enabled: true, server_name: n.sni || n.server };
+        if (n.insecure) ob.tls.insecure = true;
         break;
     }
     outbounds.push(ob);
@@ -138,6 +165,14 @@ export function toSingBox(nodes: ProxyNode[]): string {
 }
 
 // V2Ray base64 输出 (每行一个 URI)
+function safeBtoa(str: string): string {
+  // btoa() 不支持非 Latin1 字符，用 UTF-8 安全编码
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
 export function toV2Ray(nodes: ProxyNode[]): string {
   const lines: string[] = [];
   for (const n of nodes) {
@@ -148,11 +183,11 @@ export function toV2Ray(nodes: ProxyNode[]): string {
     switch (n.type) {
       case 'vmess': {
         const cfg = { v: '2', ps: n.name, add: n.server, port: String(n.port), id: n.uuid, aid: String(n.alterId || 0), net: n.network || 'tcp', type: 'none', host: n.host || '', path: n.path || '', tls: n.tls ? 'tls' : '', sni: n.sni || '' };
-        lines.push('vmess://' + btoa(JSON.stringify(cfg)));
+        lines.push('vmess://' + safeBtoa(JSON.stringify(cfg)));
         break;
       }
       case 'ss': {
-        const userInfo = btoa(`${n.cipher}:${n.password}`);
+        const userInfo = safeBtoa(`${n.cipher}:${n.password}`);
         lines.push(`ss://${userInfo}@${n.server}:${n.port}#${encodeURIComponent(n.name)}`);
         break;
       }
@@ -177,12 +212,13 @@ export function toV2Ray(nodes: ProxyNode[]): string {
         const params = new URLSearchParams();
         if (n.sni) params.set('sni', n.sni);
         params.set('security', 'tls');
+        if (n.insecure) params.set('insecure', '1');
         lines.push(`hysteria2://${n.password}@${n.server}:${n.port}?${params.toString()}#${encodeURIComponent(n.name)}`);
         break;
       }
     }
   }
-  return btoa(lines.join('\n'));
+  return safeBtoa(lines.join('\n'));
 }
 
 // SS SIP002 输出
@@ -190,11 +226,11 @@ export function toSS(nodes: ProxyNode[]): string {
   const lines: string[] = [];
   for (const n of nodes) {
     if (n.type === 'ss') {
-      const userInfo = btoa(`${n.cipher}:${n.password}`);
+      const userInfo = safeBtoa(`${n.cipher}:${n.password}`);
       lines.push(`ss://${userInfo}@${n.server}:${n.port}#${encodeURIComponent(n.name)}`);
     }
   }
-  return btoa(lines.join('\n'));
+  return safeBtoa(lines.join('\n'));
 }
 
 // Trojan 输出
@@ -206,7 +242,7 @@ export function toTrojan(nodes: ProxyNode[]): string {
       lines.push(`trojan://${n.password}@${n.server}:${n.port}${params}#${encodeURIComponent(n.name)}`);
     }
   }
-  return btoa(lines.join('\n'));
+  return safeBtoa(lines.join('\n'));
 }
 
 // 混合输出
@@ -217,11 +253,11 @@ export function toMixed(nodes: ProxyNode[]): string {
     switch (n.type) {
       case 'vmess': {
         const cfg = { v: '2', ps: n.name, add: n.server, port: String(n.port), id: n.uuid, aid: String(n.alterId || 0), net: n.network || 'tcp', type: 'none', host: n.host || '', path: n.path || '', tls: n.tls ? 'tls' : '', sni: n.sni || '' };
-        lines.push('vmess://' + btoa(JSON.stringify(cfg)));
+        lines.push('vmess://' + safeBtoa(JSON.stringify(cfg)));
         break;
       }
       case 'ss': {
-        const userInfo = btoa(`${n.cipher}:${n.password}`);
+        const userInfo = safeBtoa(`${n.cipher}:${n.password}`);
         lines.push(`ss://${userInfo}@${n.server}:${n.port}#${encodeURIComponent(n.name)}`);
         break;
       }
@@ -246,12 +282,13 @@ export function toMixed(nodes: ProxyNode[]): string {
         const params = new URLSearchParams();
         if (n.sni) params.set('sni', n.sni);
         params.set('security', 'tls');
+        if (n.insecure) params.set('insecure', '1');
         lines.push(`hysteria2://${n.password}@${n.server}:${n.port}?${params.toString()}#${encodeURIComponent(n.name)}`);
         break;
       }
     }
   }
-  return btoa(lines.join('\n'));
+  return safeBtoa(lines.join('\n'));
 }
 
 export function convert(nodes: ProxyNode[], target: TargetType): string {

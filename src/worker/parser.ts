@@ -42,8 +42,8 @@ function parseSS(uri: string): ProxyNode | null {
 
     // 现代 SIP002 格式: ss://base64(method:password)@host:port
     if (u.username) {
-      // URL username 可能已解码或仍为 base64
-      let decoded = u.username;
+      // URL.username 会把 = 编码为 %3D，破坏 base64 padding，需先解码
+      let decoded = decodeURIComponent(u.username);
       // 检查是否是 base64 (不含 : 但可解码出 :)
       if (!decoded.includes(':')) {
         decoded = base64Decode(decoded);
@@ -179,6 +179,7 @@ function parseHysteria2(uri: string): ProxyNode | null {
       tls: true,
       sni: params.get('sni') || u.hostname,
       host: params.get('host') || '',
+      insecure: params.get('insecure') === '1',
       raw: uri,
     };
   } catch {

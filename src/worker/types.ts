@@ -26,6 +26,7 @@ export interface ProxyNode {
   //通用
   alpn?: string;
   fingerprint?: string;
+  insecure?: boolean;
   ssr?: {
     protocol: string;
     obfs: string;
