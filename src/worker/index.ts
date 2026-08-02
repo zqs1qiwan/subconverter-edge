@@ -212,24 +212,19 @@ async function getAesKey(): Promise<CryptoKey> {
   );
 }
 
-function bytesToBase36(bytes: Uint8Array): string {
-  // 每字节转 2 位 base36 (0-35 用 0-9a-z)，紧凑编码
-  const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
-  let result = '';
-  for (const b of bytes) {
-    result += chars[b >> 4] + chars[b & 0xf];
-  }
-  return result;
+function bytesToBase64url(bytes: Uint8Array): string {
+  // base64url encoding (no padding) — much shorter than base36
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-function base36ToBytes(str: string): Uint8Array {
-  const bytes: number[] = [];
-  for (let i = 0; i < str.length; i += 2) {
-    const hi = parseInt(str[i], 36);
-    const lo = parseInt(str[i + 1], 36);
-    bytes.push((hi << 4) | lo);
-  }
-  return new Uint8Array(bytes);
+function base64urlToBytes(str: string): Uint8Array {
+  const padded = str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
 
 async function handleShorten(request: Request): Promise<Response> {
@@ -251,7 +246,7 @@ async function handleShorten(request: Request): Promise<Response> {
     const combined = new Uint8Array(iv.length + ciphertext.length);
     combined.set(iv, 0);
     combined.set(ciphertext, iv.length);
-    const hash = bytesToBase36(combined);
+    const hash = bytesToBase64url(combined);
 
     const shortUrl = `${new URL(request.url).origin}/s/${hash}`;
     return new Response(JSON.stringify({ short: shortUrl }), {
@@ -267,7 +262,7 @@ async function handleRedirect(url: URL): Promise<Response> {
   if (!hash || hash.length < 4) return new Response('Not Found', { status: 404 });
 
   try {
-    const combined = base36ToBytes(hash);
+    const combined = base64urlToBytes(hash);
     if (combined.length < 13) return new Response('Not Found', { status: 404 });
 
     const iv = combined.slice(0, 12);
