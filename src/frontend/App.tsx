@@ -24,8 +24,8 @@ export default function App() {
   const [emoji, setEmoji] = useState(true);
   const [include, setInclude] = useState('');
   const [exclude, setExclude] = useState('');
-  const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState('');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -43,7 +43,16 @@ export default function App() {
     return `${base}/sub?${params.toString()}`;
   }, [subUrl, target, backend, emoji, include, exclude]);
 
-  const handleGenerate = async () => {
+  const handleCopy = () => {
+    const url = generateUrl();
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const handlePreview = async () => {
     const url = generateUrl();
     if (!url) { setError('请输入订阅链接'); return; }
     setLoading(true);
@@ -53,21 +62,22 @@ export default function App() {
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const text = await resp.text();
-      setResult(text);
+      // V2Ray/SS/Trojan/Mixed 输出是 base64，解码后展示更友好
+      if (['v2ray', 'ss', 'trojan', 'mixed'].includes(target)) {
+        try {
+          const decoded = atob(text);
+          setResult(decoded);
+        } catch {
+          setResult(text);
+        }
+      } else {
+        setResult(text);
+      }
     } catch (e: any) {
       setError(e.message || '请求失败');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCopy = () => {
-    const url = generateUrl();
-    if (!url) return;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
   };
 
   const generatedUrl = generateUrl();
@@ -139,18 +149,9 @@ export default function App() {
             />
           </div>
 
-          <div className="actions-row">
-            <Button variant="primary" onClick={handleGenerate} disabled={loading || !subUrl.trim()}>
-              {loading ? <Loader size="sm" /> : '生成订阅链接'}
-            </Button>
-            <Button variant="secondary" onClick={handleCopy} disabled={!generatedUrl}>
-              {copied ? '已复制' : '复制链接'}
-            </Button>
-          </div>
-
           {generatedUrl && (
             <div className="field-group">
-              <label className="field-label">订阅地址</label>
+              <label className="field-label">订阅地址（复制后导入客户端即可使用）</label>
               <div className="url-box">
                 <code>{generatedUrl}</code>
               </div>
@@ -163,9 +164,18 @@ export default function App() {
             </div>
           )}
 
+          <div className="actions-row">
+            <Button variant="primary" onClick={handleCopy} disabled={!generatedUrl}>
+              {copied ? '已复制' : '复制订阅地址'}
+            </Button>
+            <Button variant="secondary" onClick={handlePreview} disabled={loading || !subUrl.trim()}>
+              {loading ? <Loader size="sm" /> : '预览转换结果'}
+            </Button>
+          </div>
+
           {result && (
             <div className="field-group">
-              <label className="field-label">转换结果</label>
+              <label className="field-label">转换结果预览</label>
               <pre className="result-pre">{result.slice(0, 5000)}</pre>
               {result.length > 5000 && (
                 <Text variant="secondary" size="sm" as="p" DANGEROUS_className="truncate-note">
