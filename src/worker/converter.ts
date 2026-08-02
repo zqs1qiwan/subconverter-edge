@@ -299,5 +299,7 @@ export function convert(nodes: ProxyNode[], target: TargetType): string {
     case 'ss': return toSS(nodes);
     case 'trojan': return toTrojan(nodes);
     case 'mixed': return toMixed(nodes);
+    // Shadowrocket 用 mixed 格式（base64 编码的节点 URI 列表）
+    case 'shadowrocket': return toMixed(nodes);
   }
 }

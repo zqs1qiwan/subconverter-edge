@@ -49,4 +49,4 @@ export interface ParseResult {
   subInfo?: SubscriptionInfo;
 }
 
-export type TargetType = 'clash' | 'singbox' | 'v2ray' | 'trojan' | 'ss' | 'mixed';
+export type TargetType = 'clash' | 'singbox' | 'v2ray' | 'trojan' | 'ss' | 'mixed' | 'shadowrocket';

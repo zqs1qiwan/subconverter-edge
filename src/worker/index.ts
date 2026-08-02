@@ -14,6 +14,8 @@ const TARGET_TYPES: Record<string, TargetType> = {
   trojan: 'trojan',
   ss: 'ss',
   mixed: 'mixed',
+  shadowrocket: 'shadowrocket',
+  sr: 'shadowrocket',
 };
 
 const CORS_HEADERS = {
@@ -121,7 +123,9 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   const output = convert(allNodes, targetType);
 
   const responseHeaders: Record<string, string> = {
-    'Content-Type': targetType === 'clash' ? 'text/yaml; charset=utf-8' : targetType === 'singbox' ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8',
+    'Content-Type': targetType === 'clash' ? 'text/yaml; charset=utf-8'
+      : targetType === 'singbox' ? 'application/json; charset=utf-8'
+      : 'text/plain; charset=utf-8',
     ...CORS_HEADERS,
   };
 

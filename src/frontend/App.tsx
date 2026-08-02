@@ -1,11 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button, Input, Checkbox, Badge, Text, Loader } from '@cloudflare/kumo';
 import '@cloudflare/kumo/styles/standalone';
+import QRCode from 'qrcode';
 import './styles.css';
 
 const TARGETS = [
   { value: 'clash', label: 'Clash' },
   { value: 'singbox', label: 'Sing-Box' },
+  { value: 'shadowrocket', label: 'Shadowrocket (小火箭)' },
   { value: 'v2ray', label: 'V2Ray' },
   { value: 'trojan', label: 'Trojan' },
   { value: 'ss', label: 'Shadowsocks' },
@@ -17,6 +19,9 @@ const BACKEND_OPTIONS = [
   { value: 'https://api.v1.mk', label: '肥羊增强型后端' },
 ];
 
+// 需要二维码的 target
+const SHOW_QR = ['shadowrocket', 'v2ray', 'ss', 'trojan', 'mixed'];
+
 export default function App() {
   const [subUrl, setSubUrl] = useState('');
   const [target, setTarget] = useState('clash');
@@ -25,12 +30,14 @@ export default function App() {
   const [include, setInclude] = useState('');
   const [exclude, setExclude] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState('');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [generatedUrl, setGeneratedUrl] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // 生成完整的订阅 URL，始终使用当前页面 origin 作为默认后端
-  const generateUrl = useCallback(() => {
+  // 生成订阅 URL
+  const buildUrl = useCallback(() => {
     if (!subUrl.trim()) return '';
     const params = new URLSearchParams();
     params.set('target', target);
@@ -38,40 +45,51 @@ export default function App() {
     if (!emoji) params.set('emoji', 'false');
     if (include) params.set('include', include);
     if (exclude) params.set('exclude', exclude);
-    // backend 为空时用本站后端（当前 origin）
     const base = backend || window.location.origin;
     return `${base}/sub?${params.toString()}`;
   }, [subUrl, target, backend, emoji, include, exclude]);
 
-  const handleCopy = () => {
-    const url = generateUrl();
-    if (!url) return;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
+  // 生成二维码
+  useEffect(() => {
+    if (qrDataUrl && canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
+          ctx.drawImage(img, 0, 0, 240, 240);
+        };
+        img.src = qrDataUrl;
+      }
+    }
+  }, [qrDataUrl]);
 
-  const handlePreview = async () => {
-    const url = generateUrl();
+  const handleGenerate = async () => {
+    const url = buildUrl();
     if (!url) { setError('请输入订阅链接'); return; }
     setLoading(true);
     setError('');
-    setResult('');
+    setGeneratedUrl('');
+    setQrDataUrl('');
     try {
+      // 验证后端可用
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      // 确认有内容
       const text = await resp.text();
-      // V2Ray/SS/Trojan/Mixed 输出是 base64，解码后展示更友好
-      if (['v2ray', 'ss', 'trojan', 'mixed'].includes(target)) {
-        try {
-          const decoded = atob(text);
-          setResult(decoded);
-        } catch {
-          setResult(text);
-        }
-      } else {
-        setResult(text);
+      if (!text || text.includes('"error"')) {
+        const j = JSON.parse(text);
+        throw new Error(j.error || '转换失败');
+      }
+      setGeneratedUrl(url);
+      // 生成二维码
+      if (SHOW_QR.includes(target)) {
+        const qr = await QRCode.toDataURL(url, {
+          width: 240,
+          margin: 1,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+        setQrDataUrl(qr);
       }
     } catch (e: any) {
       setError(e.message || '请求失败');
@@ -80,7 +98,13 @@ export default function App() {
     }
   };
 
-  const generatedUrl = generateUrl();
+  const handleCopy = () => {
+    if (!generatedUrl) return;
+    navigator.clipboard.writeText(generatedUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   return (
     <div className="app-container">
@@ -149,15 +173,6 @@ export default function App() {
             />
           </div>
 
-          {generatedUrl && (
-            <div className="field-group">
-              <label className="field-label">订阅地址（复制后导入客户端即可使用）</label>
-              <div className="url-box">
-                <code>{generatedUrl}</code>
-              </div>
-            </div>
-          )}
-
           {error && (
             <div className="error-box">
               <Badge variant="red">{error}</Badge>
@@ -165,23 +180,32 @@ export default function App() {
           )}
 
           <div className="actions-row">
-            <Button variant="primary" onClick={handleCopy} disabled={!generatedUrl}>
-              {copied ? '已复制' : '复制订阅地址'}
-            </Button>
-            <Button variant="secondary" onClick={handlePreview} disabled={loading || !subUrl.trim()}>
-              {loading ? <Loader size="sm" /> : '预览转换结果'}
+            <Button variant="primary" onClick={handleGenerate} disabled={loading || !subUrl.trim()}>
+              {loading ? <Loader size="sm" /> : '生成订阅链接'}
             </Button>
           </div>
 
-          {result && (
-            <div className="field-group">
-              <label className="field-label">转换结果预览</label>
-              <pre className="result-pre">{result.slice(0, 5000)}</pre>
-              {result.length > 5000 && (
-                <Text variant="secondary" size="sm" as="p" DANGEROUS_className="truncate-note">
-                  ... (已截断，共 {result.length} 字符)
-                </Text>
+          {generatedUrl && (
+            <div className="result-section">
+              <div className="field-group">
+                <label className="field-label">订阅地址</label>
+                <div className="url-box">
+                  <code>{generatedUrl}</code>
+                </div>
+              </div>
+              {qrDataUrl && (
+                <div className="qr-section">
+                  <label className="field-label">扫码导入</label>
+                  <div className="qr-box">
+                    <img src={qrDataUrl} alt="QR Code" width={240} height={240} />
+                  </div>
+                </div>
               )}
+              <div className="actions-row">
+                <Button variant="secondary" onClick={handleCopy}>
+                  {copied ? '已复制' : '复制订阅地址'}
+                </Button>
+              </div>
             </div>
           )}
         </div>

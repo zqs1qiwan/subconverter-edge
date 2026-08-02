@@ -150,6 +150,34 @@ body {
 
 .app-footer a:hover { color: #818cf8; }
 
+.result-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 0.5rem;
+}
+
+.qr-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.qr-box {
+  background: #fff;
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.qr-box img {
+  display: block;
+  width: 240px;
+  height: 240px;
+}
+
 @media (max-width: 600px) {
   .field-row { flex-direction: column; gap: 0.75rem; }
   .actions-row { flex-direction: column; }
