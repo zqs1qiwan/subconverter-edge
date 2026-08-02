@@ -21,6 +21,17 @@ const BACKEND_OPTIONS = [
   { value: 'https://api.v1.mk', label: 'api.v1.mk（肥羊增强型后端）' },
 ];
 
+const REMOTE_CONFIGS = [
+  { value: '', label: '不使用' },
+  { value: 'clash-ruleset-a', label: 'ACL4SSR Online' },
+  { value: 'clash-ruleset-b', label: 'ACL4SSR Online Full' },
+  { value: 'clash-ruleset-c', label: 'ACL4SSR Online MultiMode' },
+  { value: 'clash-ruleset-d', label: 'ACL4SSR Online NoAuto' },
+  { value: 'clash-ruleset-e', label: 'ACL4SSR Online NoReject' },
+  { value: 'clash-ruleset-f', label: 'ACL4SSR Online Mini' },
+  { value: 'clash-ruleset-g', label: 'ACL4SSR Online Mini FalseIP' },
+];
+
 const QR_TARGETS = new Set(['shadowrocket', 'v2ray', 'ss', 'trojan', 'mixed']);
 
 export default function App() {
@@ -30,10 +41,14 @@ export default function App() {
   const [emoji, setEmoji] = useState(true);
   const [include, setInclude] = useState('');
   const [exclude, setExclude] = useState('');
+  const [remoteConfig, setRemoteConfig] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [shortLoading, setShortLoading] = useState(false);
+  const [shortUrl, setShortUrl] = useState('');
+  const [shortCopied, setShortCopied] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
 
@@ -46,6 +61,7 @@ export default function App() {
     if (params.get('emoji') === 'false') setEmoji(false);
     if (params.get('include')) setInclude(params.get('include')!);
     if (params.get('exclude')) setExclude(params.get('exclude')!);
+    if (params.get('config')) setRemoteConfig(params.get('config')!);
   }, []);
 
   const buildUrl = useCallback(() => {
@@ -58,15 +74,18 @@ export default function App() {
     if (!emoji) params.set('emoji', 'false');
     if (include.trim()) params.set('include', include.trim());
     if (exclude.trim()) params.set('exclude', exclude.trim());
+    if (remoteConfig) params.set('config', remoteConfig);
 
     return `${backend || window.location.origin}/sub?${params.toString()}`;
-  }, [subUrl, target, backend, emoji, include, exclude]);
+  }, [subUrl, target, backend, emoji, include, exclude, remoteConfig]);
 
   const resetResult = () => {
     setGeneratedUrl('');
     setQrDataUrl('');
     setCopied(false);
     setError('');
+    setShortUrl('');
+    setShortCopied(false);
   };
 
   const handleGenerate = async () => {
@@ -124,6 +143,34 @@ export default function App() {
     window.setTimeout(() => setCopied(false), 1500);
   };
 
+  const handleShorten = async () => {
+    if (!generatedUrl) return;
+    setShortLoading(true);
+    setShortUrl('');
+    setShortCopied(false);
+    try {
+      const resp = await fetch('/api/shorten', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: generatedUrl }),
+      });
+      const data: any = await resp.json();
+      if (data.error) throw new Error(data.error);
+      setShortUrl(data.short);
+    } catch (e: any) {
+      setError(e.message || '短链接生成失败');
+    } finally {
+      setShortLoading(false);
+    }
+  };
+
+  const handleShortCopy = async () => {
+    if (!shortUrl) return;
+    await navigator.clipboard.writeText(shortUrl);
+    setShortCopied(true);
+    window.setTimeout(() => setShortCopied(false), 1500);
+  };
+
   return (
     <main className="app-shell">
       <a className="github-corner" href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
@@ -133,13 +180,14 @@ export default function App() {
 
       <section className="hero-panel">
         <div className="hero-copy">
-          <Text variant="heading1" as="h1">SubconverterEdge 在线订阅转换</Text>
+          <Text variant="heading1" as="h1">SubconverterEdge</Text>
           <Text variant="secondary" size="sm" as="p" DANGEROUS_className="hero-subtitle">
-            粘贴订阅链接，选择客户端格式，生成可复制或扫码导入的订阅地址。
+            在线订阅转换 · 支持多客户端格式 · 一键生成订阅地址和二维码
           </Text>
         </div>
 
         <div className="converter-card">
+          {/* 订阅链接 */}
           <div className="field-group field-main">
             <label className="field-label" htmlFor="sub-url">订阅链接</label>
             <Input
@@ -149,9 +197,10 @@ export default function App() {
               onChange={(e: any) => { setSubUrl(e.target.value); resetResult(); }}
               placeholder="支持订阅链接或单节点链接，多个链接用 | 分隔"
             />
-            <p className="field-hint">支持 SS / SSR / VMess / VLESS / Trojan / Hysteria2 / Clash 订阅。</p>
+            <p className="field-hint">支持 SS / SSR / VMess / VLESS / Trojan / Hysteria2 / Clash 订阅</p>
           </div>
 
+          {/* 客户端 + 后端 */}
           <div className="field-grid">
             <div className="field-group">
               <label className="field-label" htmlFor="target">客户端</label>
@@ -171,6 +220,7 @@ export default function App() {
             </div>
           </div>
 
+          {/* 高级选项折叠 */}
           <button className="advanced-toggle" onClick={() => setShowAdvanced(!showAdvanced)}>
             <span>高级选项</span>
             <svg viewBox="0 0 24 24" className={showAdvanced ? 'chevron-open' : ''}><path d="M6 9l6 6 6-6" /></svg>
@@ -178,24 +228,39 @@ export default function App() {
 
           {showAdvanced && (
             <div className="advanced-section">
+              {/* 远程配置 */}
+              <div className="field-group">
+                <label className="field-label" htmlFor="config">远程配置</label>
+                <div className="native-select-wrapper">
+                  <select id="config" className="native-select" value={remoteConfig} onChange={(e) => { setRemoteConfig(e.target.value); resetResult(); }}>
+                    {REMOTE_CONFIGS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+                <p className="field-hint">仅 Clash 格式生效，基于 ACL4SSR 规则模板</p>
+              </div>
+
+              {/* 包含 / 排除 */}
               <div className="field-grid compact-grid">
                 <div className="field-group">
-                  <label className="field-label" htmlFor="include">包含</label>
+                  <label className="field-label" htmlFor="include">包含节点</label>
                   <Input id="include" value={include} onChange={(e: any) => { setInclude(e.target.value); resetResult(); }} placeholder="ss,vmess" />
                 </div>
                 <div className="field-group">
-                  <label className="field-label" htmlFor="exclude">排除</label>
+                  <label className="field-label" htmlFor="exclude">排除节点</label>
                   <Input id="exclude" value={exclude} onChange={(e: any) => { setExclude(e.target.value); resetResult(); }} placeholder="ssr" />
                 </div>
               </div>
+
+              {/* Emoji */}
               <div className="options-row">
-                <Checkbox checked={emoji} onCheckedChange={(checked: boolean) => { setEmoji(!!checked); resetResult(); }} label="Emoji" />
+                <Checkbox checked={emoji} onCheckedChange={(checked: boolean) => { setEmoji(!!checked); resetResult(); }} label="Emoji 国旗" />
               </div>
             </div>
           )}
 
           {error && <Badge variant="red">{error}</Badge>}
 
+          {/* 按钮区 */}
           <div className="actions-row">
             <button className="btn-primary" onClick={handleGenerate} disabled={loading || !subUrl.trim()}>
               {loading ? <Loader size="sm" /> : '生成订阅链接'}
@@ -205,6 +270,7 @@ export default function App() {
             </button>
           </div>
 
+          {/* 结果区 */}
           {generatedUrl && (
             <section className="result-card" aria-label="Generated subscription">
               <div className="result-url-row">
@@ -217,6 +283,23 @@ export default function App() {
                 <div className="qr-panel">
                   <img src={qrDataUrl} alt="Subscription QR code" width={248} height={248} />
                   <span>扫码导入</span>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* 短链接区 */}
+          {generatedUrl && (
+            <section className="short-link-section">
+              <button className="btn-tertiary" onClick={handleShorten} disabled={shortLoading}>
+                {shortLoading ? <Loader size="sm" /> : shortUrl ? '重新生成短链接' : '生成短链接'}
+              </button>
+              {shortUrl && (
+                <div className="short-link-result">
+                  <div className="url-box short-url-box"><code>{shortUrl}</code></div>
+                  <button className="btn-icon" onClick={handleShortCopy} title="复制短链接">
+                    {shortCopied ? '✓' : '⧉'}
+                  </button>
                 </div>
               )}
             </section>

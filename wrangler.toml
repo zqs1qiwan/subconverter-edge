@@ -7,6 +7,10 @@ compatibility_flags = ["nodejs_compat"]
 directory = "./dist"
 binding = "ASSETS"
 
+[[kv_namespaces]]
+binding = "SHORT_LINKS"
+id = "subconverter_edge_short_links"
+
 [observability]
 enabled = true
 head_sampling_rate = 1

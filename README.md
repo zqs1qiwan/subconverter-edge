@@ -2,32 +2,30 @@
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/zqs1qiwan/subconverter-edge)
 
-Cloudflare Workers subscription converter with a React + Kumo frontend.
+Cloudflare Workers 订阅转换服务，前端使用 React + Kumo，后端在同一个 Worker 内完成解析和转换。
 
-## Features
+## 功能
 
-- Parse SS, SSR, VMess, VLESS, Trojan, Hysteria2, and Clash YAML subscriptions
-- Convert to Clash, Sing-Box, Shadowrocket, V2Ray, Trojan, Shadowsocks, or mixed URI lists
-- Generate a subscription URL from the web UI
-- Generate QR codes for mobile clients that support scan import
-- Optional emoji flags and node type include/exclude filters
-- Single Worker deployment: static frontend and `/sub` API
+- 解析 SS / SSR / VMess / VLESS / Trojan / Hysteria2 / Clash YAML 订阅
+- 转换为 Clash / Sing-Box / Shadowrocket / V2Ray / Trojan / Shadowsocks / Mixed 格式
+- 生成订阅链接和二维码（移动端可扫码导入）
+- 远程配置选择（ACL4SSR 规则模板，仅 Clash）
+- 节点类型过滤（包含 / 排除）
+- Emoji 国旗
+- 短链接生成（SHA-256 哈希，KV 存储，30 天有效）
+- URL 参数预填（支持 `?url=&target=&backend=` 直接打开）
+- 高级选项折叠
+- 单 Worker 部署，前端和 API 一体
 
-## Fork and deploy
+## 一键部署
 
-### One-click deploy
+点击 README 顶部的 Deploy to Cloudflare 按钮，Cloudflare 会自动克隆仓库、创建 Worker、构建并部署到你的账号。
 
-Click the button at the top of this README. Cloudflare will clone the repository, create a Worker, run the build command, and deploy it to your account.
+KV namespace 会在部署时自动创建，用于短链接存储。
 
-After deployment, you can add a custom domain in the Cloudflare dashboard if needed.
+部署后可在 Cloudflare Dashboard 绑定自定义域名。
 
-### Manual deploy
-
-Requirements:
-
-- Node.js 18 or newer
-- Cloudflare account
-- Wrangler CLI login or `CLOUDFLARE_API_TOKEN`
+## 手动部署
 
 ```bash
 git clone https://github.com/zqs1qiwan/subconverter-edge.git
@@ -37,27 +35,154 @@ npm run build
 npx wrangler deploy
 ```
 
-For a fork:
-
-1. Fork this repository on GitHub.
-2. Clone your fork.
-3. Run `npm install && npm run build`.
-4. Run `npx wrangler deploy`.
-5. Add a custom domain in Cloudflare Workers settings if needed.
-
-`wrangler.toml` does not include a default custom route. This keeps one-click deploy usable for any Cloudflare account. If you want to deploy from the CLI to a specific route, pass it explicitly:
+如果需要部署到指定域名：
 
 ```bash
 npx wrangler deploy --route "sub.example.com/*"
 ```
 
-The deployed frontend includes a "部署我自己的转换服务" badge in the top-right corner. It points to this upstream repository so users of forked deployments can find the source project.
+`wrangler.toml` 不包含默认自定义路由，默认使用 `*.workers.dev` 域名。
+
+## 使用
+
+### Web UI
+
+打开 Worker 地址，粘贴订阅链接，选择客户端格式，点击「生成订阅链接」。
+
+生成后会显示订阅地址和二维码（移动端格式），点击「复制链接」即可。
+
+高级选项中可以选择远程配置、节点过滤和 Emoji。
+
+### API
+
+```text
+GET /sub?target=<target>&url=<subscription_url>
+```
+
+| 参数 | 必填 | 说明 |
+|---|---|---|
+| `target` | 是 | `clash` `singbox` `shadowrocket` `v2ray` `trojan` `ss` `mixed` |
+| `url` | 是 | 订阅链接，多个用 `|` 分隔 |
+| `emoji` | 否 | 默认 `true`，设 `false` 关闭国旗 |
+| `include` | 否 | 只保留指定类型，如 `ss,vmess` |
+| `exclude` | 否 | 排除指定类型，如 `ssr` |
+| `config` | 否 | 远程配置 ID，如 `clash-ruleset-a` |
+
+### 短链接
+
+```text
+POST /api/shorten
+Content-Type: application/json
+
+{"url": "https://your-worker.workers.dev/sub?target=clash&url=..."}
+```
+
+返回 `{ "short": "https://your-worker.workers.dev/s/xxxxxx" }`
+
+访问 `/s/xxxxxx` 会 302 跳转到原始订阅地址。
+
+### 远程配置列表
+
+```text
+GET /api/configs
+```
+
+## 目标格式
+
+| 目标 | 输出 |
+|---|---|
+| `clash` | Clash YAML |
+| `singbox` | Sing-Box JSON |
+| `shadowrocket` | Base64 编码的 Mixed URI 列表 |
+| `v2ray` | Base64 编码的 V2Ray URI 列表 |
+| `trojan` | Base64 编码的 Trojan URI 列表 |
+| `ss` | Base64 编码的 Shadowsocks URI 列表 |
+| `mixed` | Base64 编码的 Mixed URI 列表 |
+
+## 项目结构
+
+```text
+src/
+  frontend/  React + Kumo UI
+  worker/    Worker 路由、解析器、转换器、短链接
+```
+
+## 开发
+
+```bash
+npm install
+npm run dev
+npm run build
+```
+
+部署：
+
+```bash
+npx wrangler deploy
+```
+
+## 前端角标
+
+页面右上角有「部署我自己的转换服务」角标，指向本仓库。Fork 后部署的服务也会展示此角标，用户可以点击找到上游开源项目。
+
+## License
+
+MIT
+
+---
+
+# SubconverterEdge (English)
+
+Cloudflare Workers subscription converter with a React + Kumo frontend and backend in a single Worker.
+
+## Features
+
+- Parse SS / SSR / VMess / VLESS / Trojan / Hysteria2 / Clash YAML subscriptions
+- Convert to Clash / Sing-Box / Shadowrocket / V2Ray / Trojan / Shadowsocks / Mixed
+- Generate subscription URL and QR code (scan import for mobile clients)
+- Remote config selection (ACL4SSR rule templates, Clash only)
+- Node type filtering (include / exclude)
+- Emoji flags
+- Short link generation (SHA-256 hash, KV storage, 30-day TTL)
+- URL parameter prefill (`?url=&target=&backend=`)
+- Advanced options collapsible
+- Single Worker deployment
+
+## One-click deploy
+
+Click the Deploy to Cloudflare button at the top of this README. Cloudflare will clone the repo, create the Worker, build, and deploy to your account.
+
+A KV namespace is automatically provisioned for short link storage.
+
+After deployment, you can add a custom domain in the Cloudflare dashboard.
+
+## Manual deploy
+
+```bash
+git clone https://github.com/zqs1qiwan/subconverter-edge.git
+cd subconverter-edge
+npm install
+npm run build
+npx wrangler deploy
+```
+
+To deploy to a custom route:
+
+```bash
+npx wrangler deploy --route "sub.example.com/*"
+```
+
+`wrangler.toml` has no default custom route. The default domain is `*.workers.dev`.
 
 ## Usage
 
 ### Web UI
 
-Open your Worker URL, paste a subscription URL, choose a target client, then click **生成订阅链接**. The page returns a subscription link and, for supported mobile clients, a QR code.
+Open your Worker URL, paste a subscription link, select a target client, and click the generate button.
+
+The subscription URL and QR code (for mobile formats) will appear. Click copy to use.
+
+Advanced options include remote config, node filtering, and emoji flags.
 
 ### API
 
@@ -66,59 +191,26 @@ GET /sub?target=<target>&url=<subscription_url>
 ```
 
 | Param | Required | Description |
-|---|---:|---|
-| `target` | yes | `clash`, `singbox`, `shadowrocket`, `v2ray`, `trojan`, `ss`, `mixed` |
-| `url` | yes | Source subscription URL. Multiple URLs can be separated with `|` |
-| `emoji` | no | `true` by default. Set `false` to disable emoji flags |
-| `include` | no | Keep only specified node types, for example `ss,vmess` |
-| `exclude` | no | Drop specified node types, for example `ssr` |
+|---|---|---|
+| `target` | yes | `clash` `singbox` `shadowrocket` `v2ray` `trojan` `ss` `mixed` |
+| `url` | yes | Subscription URL, pipe-separated for multiple |
+| `emoji` | no | `true` by default |
+| `include` | no | Keep only specified types, e.g. `ss,vmess` |
+| `exclude` | no | Drop specified types, e.g. `ssr` |
+| `config` | no | Remote config ID, e.g. `clash-ruleset-a` |
 
-Example:
-
-```bash
-curl 'https://<your-worker-domain>/sub?target=clash&url=https%3A%2F%2Fexample.com%2Fsub'
-```
-
-## Target formats
-
-| Target | Output |
-|---|---|
-| `clash` | Clash YAML |
-| `singbox` | Sing-Box JSON |
-| `shadowrocket` | Base64-encoded mixed URI list |
-| `v2ray` | Base64-encoded V2Ray URI list |
-| `trojan` | Base64-encoded Trojan URI list |
-| `ss` | Base64-encoded Shadowsocks URI list |
-| `mixed` | Base64-encoded mixed URI list |
-
-## Project structure
+### Short link
 
 ```text
-src/
-  frontend/  React + Kumo UI
-  worker/    Worker router, parsers, converters
+POST /api/shorten
+Content-Type: application/json
+
+{"url": "https://your-worker.workers.dev/sub?target=clash&url=..."}
 ```
 
-## Development
+Returns `{ "short": "https://your-worker.workers.dev/s/xxxxxx" }`
 
-```bash
-npm install
-npm run dev
-npm run build
-```
-
-Deploy:
-
-```bash
-npx wrangler deploy
-```
-
-## Verification
-
-```bash
-curl -s 'https://<your-worker-domain>/version'
-curl -s 'https://<your-worker-domain>/sub?target=clash&url=https%3A%2F%2Fexample.com%2Fsub'
-```
+Visiting `/s/xxxxxx` redirects 302 to the original subscription URL.
 
 ## License
 

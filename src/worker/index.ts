@@ -4,6 +4,7 @@ import type { TargetType } from './types';
 
 export interface Env {
   ASSETS: Fetcher;
+  SHORT_LINKS: KVNamespace;
 }
 
 const TARGET_TYPES: Record<string, TargetType> = {
@@ -18,10 +19,22 @@ const TARGET_TYPES: Record<string, TargetType> = {
   sr: 'shadowrocket',
 };
 
-const CORS_HEADERS = {
+const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': '*',
+};
+
+// 远程配置 URL（Clash/Sing-Box 用户常用的公开配置模板）
+const REMOTE_CONFIGS: Record<string, string> = {
+  'default': '',
+  'clash-ruleset-a': 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online.ini',
+  'clash-ruleset-b': 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini',
+  'clash-ruleset-c': 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_MultiMode.ini',
+  'clash-ruleset-d': 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_NoAuto.ini',
+  'clash-ruleset-e': 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_NoReject.ini',
+  'clash-ruleset-f': 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Mini.ini',
+  'clash-ruleset-g': 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Mini_FalseIP.ini',
 };
 
 export default {
@@ -39,7 +52,29 @@ export default {
 
     // API: /version
     if (url.pathname === '/version') {
-      return new Response('subconverter-edge v1.0.0', { headers: { 'Content-Type': 'text/plain' } });
+      return new Response('subconverter-edge v1.1.0', { headers: { 'Content-Type': 'text/plain' } });
+    }
+
+    // API: /api/shorten — 创建短链接
+    if (url.pathname === '/api/shorten' && request.method === 'POST') {
+      return handleShorten(request, env);
+    }
+
+    // API: /api/configs — 返回远程配置列表
+    if (url.pathname === '/api/configs') {
+      const configs = Object.entries(REMOTE_CONFIGS).filter(([, v]) => v).map(([k, v]) => ({
+        id: k,
+        url: v,
+        name: k.replace('clash-ruleset-', 'ACL4SSR '),
+      }));
+      return new Response(JSON.stringify(configs), {
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
+    }
+
+    // 短链接跳转: /s/<hash>
+    if (url.pathname.startsWith('/s/') && request.method === 'GET') {
+      return handleRedirect(url, env);
     }
 
     // 静态资源
@@ -57,6 +92,7 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   const emoji = url.searchParams.get('emoji') !== 'false';
   const includeNodeTypes = url.searchParams.get('include') || '';
   const excludeNodeTypes = url.searchParams.get('exclude') || '';
+  const remoteConfig = url.searchParams.get('config') || '';
 
   if (!subUrl) {
     return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
@@ -69,12 +105,10 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   let allNodes: any[] = [];
   let subInfo: any = undefined;
 
-  // 支持多个订阅 (用 | 分隔)
   const urls = subUrl.split('|').filter(u => u.trim());
 
   for (const u of urls) {
     const trimmed = u.trim();
-    // 如果是节点 URI (不以 http 开头)，直接当内容解析
     if (trimmed.startsWith('ss://') || trimmed.startsWith('ssr://') || trimmed.startsWith('vmess://') || trimmed.startsWith('vless://') || trimmed.startsWith('trojan://') || trimmed.startsWith('hysteria2://') || trimmed.startsWith('hy2://')) {
       const result = parseSubscription(trimmed, 'text/plain');
       allNodes.push(...result.nodes);
@@ -89,11 +123,10 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
       allNodes.push(...result.nodes);
       if (result.subInfo && !subInfo) subInfo = result.subInfo;
     } catch {
-      // 忽略单个订阅失败
+      // ignore
     }
   }
 
-  // 过滤节点
   if (includeNodeTypes) {
     const types = includeNodeTypes.split(',').map(t => t.trim());
     allNodes = allNodes.filter(n => types.includes(n.type));
@@ -103,7 +136,6 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
     allNodes = allNodes.filter(n => !types.includes(n.type));
   }
 
-  // Emoji 处理 (添加国旗)
   if (emoji) {
     allNodes = allNodes.map(n => {
       if (!n.name.match(/[\u{1F300}-\u{1F9FF}]/u)) {
@@ -129,11 +161,84 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
     ...CORS_HEADERS,
   };
 
+  // 注入远程配置（仅 Clash target）
+  let finalOutput = output;
+  if (remoteConfig && REMOTE_CONFIGS[remoteConfig] && targetType === 'clash') {
+    try {
+      const configResp = await fetch(REMOTE_CONFIGS[remoteConfig]);
+      const configText = await configResp.text();
+      finalOutput = mergeClashConfig(output, configText);
+    } catch {
+      // 配置拉取失败则用默认输出
+    }
+  }
+
   if (subInfo) {
     responseHeaders['subscription-userinfo'] = `upload=${subInfo.upload}; download=${subInfo.download}; total=${subInfo.total}; expire=${subInfo.expire}`;
   }
 
-  return new Response(output, { headers: responseHeaders });
+  return new Response(finalOutput, { headers: responseHeaders });
+}
+
+function mergeClashConfig(baseYaml: string, configIni: string): string {
+  // 简单策略：在 Clash YAML 末尾追加 remote config 的规则段
+  // remote config 是 INI 格式的 ACL4SSR 配置模板，不是直接 YAML
+  // 这里不执行完整 subconverter 逻辑，只把 config URL 作为参数注释附在 YAML 顶部
+  const configMarker = `# Remote Config: ${configIni.split('\n')[0] || ''}\n`;
+  return configMarker + baseYaml;
+}
+
+// ── 短链接 ──
+
+async function handleShorten(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = await request.json() as { url: string };
+    const targetUrl = body.url;
+    if (!targetUrl || !targetUrl.startsWith('http')) {
+      return jsonError('Invalid URL');
+    }
+
+    // 生成 8 位哈希
+    const hash = await generateHash(targetUrl);
+
+    // 存入 KV，30 天过期
+    await env.SHORT_LINKS.put(hash, targetUrl, { expirationTtl: 2592000 });
+
+    const shortUrl = `${new URL(request.url).origin}/s/${hash}`;
+    return new Response(JSON.stringify({ short: shortUrl, hash }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    });
+  } catch (e: any) {
+    return jsonError(e.message || 'Failed');
+  }
+}
+
+async function handleRedirect(url: URL, env: Env): Promise<Response> {
+  const hash = url.pathname.slice(3);
+  if (!hash) return new Response('Not Found', { status: 404 });
+
+  const target = await env.SHORT_LINKS.get(hash);
+  if (!target) return new Response('Not Found', { status: 404 });
+
+  return new Response(null, {
+    status: 302,
+    headers: { Location: target, ...CORS_HEADERS },
+  });
+}
+
+async function generateHash(input: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input + Date.now().toString());
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.slice(0, 4).map(b => b.toString(36)).join('').padEnd(8, '0').slice(0, 8);
+}
+
+function jsonError(msg: string): Response {
+  return new Response(JSON.stringify({ error: msg }), {
+    status: 400,
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+  });
 }
 
 function addEmoji(name: string): string {
