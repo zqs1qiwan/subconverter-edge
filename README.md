@@ -1,62 +1,111 @@
-# subconverter-edge
+# SubconverterEdge
 
-Cloudflare Workers subscription converter with [Kumo](https://github.com/cloudflare/kumo) frontend.
+Cloudflare Workers subscription converter with a React + Kumo frontend.
 
 ## Features
 
-- Parse SS/SSR/VMess/VLESS(Reality)/Trojan/Hysteria2/Clash YAML
-- Convert to Clash/Sing-Box/V2Ray/SS/Trojan/Mixed
-- Single Worker: SPA + API
-- Emoji flags
-- Node type filter (include/exclude)
+- Parse SS, SSR, VMess, VLESS, Trojan, Hysteria2, and Clash YAML subscriptions
+- Convert to Clash, Sing-Box, Shadowrocket, V2Ray, Trojan, Shadowsocks, or mixed URI lists
+- Generate a subscription URL from the web UI
+- Generate QR codes for mobile clients that support scan import
+- Optional emoji flags and node type include/exclude filters
+- Single Worker deployment: static frontend and `/sub` API
 
-## Deploy
+## Fork and deploy
 
-Requirements: Node 18+, pnpm, Cloudflare account.
+Requirements:
+
+- Node.js 18 or newer
+- Cloudflare account
+- Wrangler CLI login or `CLOUDFLARE_API_TOKEN`
 
 ```bash
 git clone https://github.com/zqs1qiwan/subconverter-edge.git
 cd subconverter-edge
-pnpm install
-pnpm build
+npm install
+npm run build
 npx wrangler deploy
 ```
 
-First deploy requires npx wrangler login.
+For a fork:
 
-## Custom Domain (optional)
+1. Fork this repository on GitHub.
+2. Clone your fork.
+3. Edit `wrangler.toml`:
+   - Set `name` if you want a different Worker name.
+   - Remove the `routes` section if you only want a `*.workers.dev` URL.
+   - Or replace the route with your own custom domain.
+4. Run `npm install && npm run build`.
+5. Run `npx wrangler deploy`.
 
-Edit wrangler.toml routes to your domain, or remove [[routes]] to use *.workers.dev.
+The deployed frontend includes a GitHub badge in the top-right corner. It points to this upstream repository so users of forked deployments can find the source project.
 
 ## Usage
 
 ### Web UI
 
-Visit your Worker URL, enter subscription link, select target format, click generate.
+Open your Worker URL, paste a subscription URL, choose a target client, then click **生成订阅链接**. The page returns a subscription link and, for supported mobile clients, a QR code.
 
 ### API
 
+```text
 GET /sub?target=<target>&url=<subscription_url>
+```
 
 | Param | Required | Description |
-|-------|----------|-------------|
-| target | yes | clash/singbox/v2ray/trojan/ss/mixed |
-| url | yes | subscription URL (pipe-separated for multiple) |
-| emoji | no | true (default) / false |
-| include | no | keep only specified types (e.g. ss,vmess) |
-| exclude | no | drop specified types (e.g. ssr) |
+|---|---:|---|
+| `target` | yes | `clash`, `singbox`, `shadowrocket`, `v2ray`, `trojan`, `ss`, `mixed` |
+| `url` | yes | Source subscription URL. Multiple URLs can be separated with `|` |
+| `emoji` | no | `true` by default. Set `false` to disable emoji flags |
+| `include` | no | Keep only specified node types, for example `ss,vmess` |
+| `exclude` | no | Drop specified node types, for example `ssr` |
 
-## Tech Stack
+Example:
 
-- Backend: Cloudflare Workers (TypeScript)
-- Frontend: React 19 + Vite + @cloudflare/kumo
-- Deploy: Wrangler CLI
+```bash
+curl 'https://<your-worker-domain>/sub?target=clash&url=https%3A%2F%2Fexample.com%2Fsub'
+```
 
-## Structure
+## Target formats
 
+| Target | Output |
+|---|---|
+| `clash` | Clash YAML |
+| `singbox` | Sing-Box JSON |
+| `shadowrocket` | Base64-encoded mixed URI list |
+| `v2ray` | Base64-encoded V2Ray URI list |
+| `trojan` | Base64-encoded Trojan URI list |
+| `ss` | Base64-encoded Shadowsocks URI list |
+| `mixed` | Base64-encoded mixed URI list |
+
+## Project structure
+
+```text
 src/
-  worker/    # backend: parser + converter + router
-  frontend/  # React SPA
+  frontend/  React + Kumo UI
+  worker/    Worker router, parsers, converters
+```
+
+## Development
+
+```bash
+npm install
+npm run dev
+npm run build
+```
+
+Deploy:
+
+```bash
+npx wrangler deploy
+```
+
+## Verification
+
+```bash
+curl -s 'https://<your-worker-domain>/version'
+curl -s 'https://<your-worker-domain>/sub?target=clash&url=https%3A%2F%2Fexample.com%2Fsub'
+```
 
 ## License
 

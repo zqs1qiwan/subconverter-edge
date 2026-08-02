@@ -1,26 +1,27 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { Button, Input, Checkbox, Badge, Text, Loader } from '@cloudflare/kumo';
 import '@cloudflare/kumo/styles/standalone';
 import QRCode from 'qrcode';
 import './styles.css';
 
+const GITHUB_URL = 'https://github.com/zqs1qiwan/subconverter-edge';
+
 const TARGETS = [
   { value: 'clash', label: 'Clash' },
   { value: 'singbox', label: 'Sing-Box' },
-  { value: 'shadowrocket', label: 'Shadowrocket (小火箭)' },
+  { value: 'shadowrocket', label: 'Shadowrocket' },
   { value: 'v2ray', label: 'V2Ray' },
   { value: 'trojan', label: 'Trojan' },
   { value: 'ss', label: 'Shadowsocks' },
-  { value: 'mixed', label: '混合订阅' },
+  { value: 'mixed', label: 'Mixed' },
 ];
 
 const BACKEND_OPTIONS = [
-  { value: '', label: '本站后端' },
-  { value: 'https://api.v1.mk', label: '肥羊增强型后端' },
+  { value: '', label: 'Current Worker' },
+  { value: 'https://api.v1.mk', label: 'api.v1.mk' },
 ];
 
-// 需要二维码的 target
-const SHOW_QR = ['shadowrocket', 'v2ray', 'ss', 'trojan', 'mixed'];
+const QR_TARGETS = new Set(['shadowrocket', 'v2ray', 'ss', 'trojan', 'mixed']);
 
 export default function App() {
   const [subUrl, setSubUrl] = useState('');
@@ -34,192 +35,175 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // 生成订阅 URL
   const buildUrl = useCallback(() => {
-    if (!subUrl.trim()) return '';
+    const input = subUrl.trim();
+    if (!input) return '';
+
     const params = new URLSearchParams();
     params.set('target', target);
-    params.set('url', subUrl.trim());
+    params.set('url', input);
     if (!emoji) params.set('emoji', 'false');
-    if (include) params.set('include', include);
-    if (exclude) params.set('exclude', exclude);
-    const base = backend || window.location.origin;
-    return `${base}/sub?${params.toString()}`;
-  }, [subUrl, target, backend, emoji, include, exclude]);
+    if (include.trim()) params.set('include', include.trim());
+    if (exclude.trim()) params.set('exclude', exclude.trim());
 
-  // 生成二维码
-  useEffect(() => {
-    if (qrDataUrl && canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        const img = new Image();
-        img.onload = () => {
-          ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
-          ctx.drawImage(img, 0, 0, 240, 240);
-        };
-        img.src = qrDataUrl;
-      }
-    }
-  }, [qrDataUrl]);
+    return `${backend || window.location.origin}/sub?${params.toString()}`;
+  }, [subUrl, target, backend, emoji, include, exclude]);
 
   const handleGenerate = async () => {
     const url = buildUrl();
-    if (!url) { setError('请输入订阅链接'); return; }
+    if (!url) {
+      setError('Paste a subscription URL first');
+      return;
+    }
+
     setLoading(true);
     setError('');
+    setCopied(false);
     setGeneratedUrl('');
     setQrDataUrl('');
+
     try {
-      // 验证后端可用
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      // 确认有内容（非 JSON error）
+      const resp = await fetch(url, { cache: 'no-store' });
       const text = await resp.text();
-      const ct = resp.headers.get('content-type') || '';
-      if (ct.includes('application/json') && text.includes('"error"')) {
-        try {
-          const j = JSON.parse(text);
-          throw new Error(j.error || '转换失败');
-        } catch (e: any) {
-          if (e.message) throw e;
+      const contentType = resp.headers.get('content-type') || '';
+
+      if (!resp.ok) {
+        if (contentType.includes('application/json')) {
+          try {
+            const payload = JSON.parse(text);
+            throw new Error(payload.error || `HTTP ${resp.status}`);
+          } catch (e: any) {
+            throw new Error(e.message || `HTTP ${resp.status}`);
+          }
         }
+        throw new Error(`HTTP ${resp.status}`);
       }
+
       if (!text || text.length < 10) {
-        throw new Error('后端返回空内容');
+        throw new Error('Empty response');
       }
+
       setGeneratedUrl(url);
-      // 生成二维码
-      if (SHOW_QR.includes(target)) {
+
+      if (QR_TARGETS.has(target)) {
         const qr = await QRCode.toDataURL(url, {
-          width: 240,
+          width: 248,
           margin: 1,
           color: { dark: '#000000', light: '#ffffff' },
         });
         setQrDataUrl(qr);
       }
     } catch (e: any) {
-      setError(e.message || '请求失败');
+      setError(e.message || 'Failed to generate');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!generatedUrl) return;
-    navigator.clipboard.writeText(generatedUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
+    await navigator.clipboard.writeText(generatedUrl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
   };
 
   return (
-    <div className="app-container">
-      <div className="app-content">
-        <div className="app-header">
-          <Text variant="heading1" as="h1">订阅转换</Text>
-          <Text variant="secondary" size="sm" as="p" DANGEROUS_className="sub-title">
-            Cloudflare Workers + Kumo
+    <main className="app-shell">
+      <a className="github-corner" href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
+        <span>GitHub</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg>
+      </a>
+
+      <section className="hero-panel">
+        <div className="hero-copy">
+          <Text variant="heading1" as="h1">SubconverterEdge 在线订阅转换</Text>
+          <Text variant="secondary" size="md" as="p" DANGEROUS_className="hero-subtitle">
+            粘贴订阅链接，选择客户端格式，生成可复制或扫码导入的订阅地址。
           </Text>
         </div>
 
-        <div className="form-card">
-          <div className="field-group">
-            <label className="field-label">订阅链接</label>
+        <div className="converter-card">
+          <div className="field-group field-main">
+            <label className="field-label" htmlFor="sub-url">订阅链接</label>
             <Input
+              id="sub-url"
               name="subUrl"
               value={subUrl}
-              onChange={(e: any) => setSubUrl(e.target.value)}
+              onChange={(e: any) => {
+                setSubUrl(e.target.value);
+                setGeneratedUrl('');
+                setQrDataUrl('');
+                setCopied(false);
+                setError('');
+              }}
               placeholder="https://example.com/sub"
             />
           </div>
 
-          <div className="field-row">
+          <div className="field-grid">
             <div className="field-group">
-              <label className="field-label">生成类型</label>
+              <label className="field-label" htmlFor="target">客户端</label>
               <div className="native-select-wrapper">
-                <select
-                  className="native-select"
-                  value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                >
+                <select id="target" className="native-select" value={target} onChange={(e) => { setTarget(e.target.value); setGeneratedUrl(''); setQrDataUrl(''); }}>
                   {TARGETS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
             </div>
             <div className="field-group">
-              <label className="field-label">后端地址</label>
+              <label className="field-label" htmlFor="backend">后端</label>
               <div className="native-select-wrapper">
-                <select
-                  className="native-select"
-                  value={backend}
-                  onChange={(e) => setBackend(e.target.value)}
-                >
+                <select id="backend" className="native-select" value={backend} onChange={(e) => { setBackend(e.target.value); setGeneratedUrl(''); setQrDataUrl(''); }}>
                   {BACKEND_OPTIONS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
                 </select>
               </div>
             </div>
           </div>
 
-          <div className="field-row">
+          <div className="field-grid compact-grid">
             <div className="field-group">
-              <label className="field-label">包含节点 (选填)</label>
-              <Input value={include} onChange={(e: any) => setInclude(e.target.value)} placeholder="ss,vmess" />
+              <label className="field-label" htmlFor="include">包含</label>
+              <Input id="include" value={include} onChange={(e: any) => { setInclude(e.target.value); setGeneratedUrl(''); }} placeholder="ss,vmess" />
             </div>
             <div className="field-group">
-              <label className="field-label">排除节点 (选填)</label>
-              <Input value={exclude} onChange={(e: any) => setExclude(e.target.value)} placeholder="ssr" />
+              <label className="field-label" htmlFor="exclude">排除</label>
+              <Input id="exclude" value={exclude} onChange={(e: any) => { setExclude(e.target.value); setGeneratedUrl(''); }} placeholder="ssr" />
             </div>
           </div>
 
-          <div className="checkbox-row">
-            <Checkbox
-              checked={emoji}
-              onCheckedChange={(checked: boolean) => setEmoji(!!checked)}
-              label="启用 Emoji"
-            />
+          <div className="options-row">
+            <Checkbox checked={emoji} onCheckedChange={(checked: boolean) => { setEmoji(!!checked); setGeneratedUrl(''); }} label="Emoji" />
           </div>
 
-          {error && (
-            <div className="error-box">
-              <Badge variant="red">{error}</Badge>
-            </div>
-          )}
+          {error && <Badge variant="red">{error}</Badge>}
 
           <div className="actions-row">
             <Button variant="primary" onClick={handleGenerate} disabled={loading || !subUrl.trim()}>
               {loading ? <Loader size="sm" /> : '生成订阅链接'}
             </Button>
             <Button variant="secondary" onClick={handleCopy} disabled={!generatedUrl}>
-              {copied ? '已复制' : '复制订阅地址'}
+              {copied ? '已复制' : '复制链接'}
             </Button>
           </div>
 
           {generatedUrl && (
-            <div className="result-section">
-              <div className="field-group">
-                <label className="field-label">订阅地址</label>
-                <div className="url-box">
-                  <code>{generatedUrl}</code>
+            <section className="result-card" aria-label="Generated subscription">
+              <div className="result-url-row">
+                <div className="field-group">
+                  <label className="field-label">订阅地址</label>
+                  <div className="url-box"><code>{generatedUrl}</code></div>
                 </div>
               </div>
               {qrDataUrl && (
-                <div className="qr-section">
-                  <label className="field-label">扫码导入</label>
-                  <div className="qr-box">
-                    <img src={qrDataUrl} alt="QR Code" width={240} height={240} />
-                  </div>
+                <div className="qr-panel">
+                  <img src={qrDataUrl} alt="Subscription QR code" width={248} height={248} />
+                  <span>扫码导入</span>
                 </div>
               )}
-            </div>
+            </section>
           )}
         </div>
-
-        <div className="app-footer">
-          <a href="https://github.com/zqs1qiwan/subconverter-edge" target="_blank" rel="noopener noreferrer">GitHub</a>
-        </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
