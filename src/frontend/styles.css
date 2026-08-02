@@ -62,6 +62,20 @@ body {
   position: relative;
 }
 
+.native-select-wrapper::after {
+  content: '';
+  position: absolute;
+  right: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid rgba(255,255,255,0.5);
+  pointer-events: none;
+}
+
 .native-select {
   width: 100%;
   background: rgba(255,255,255,0.05);

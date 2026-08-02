@@ -134,7 +134,7 @@ export default function App() {
           <div className="checkbox-row">
             <Checkbox
               checked={emoji}
-              onCheckedChange={(e: any) => setEmoji(!!e.checked)}
+              onCheckedChange={(checked: boolean) => setEmoji(!!checked)}
               label="启用 Emoji"
             />
           </div>
