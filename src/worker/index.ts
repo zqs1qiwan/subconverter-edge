@@ -227,6 +227,46 @@ function base64urlToBytes(str: string): Uint8Array {
   return bytes;
 }
 
+async function compressDeflate(data: Uint8Array): Promise<Uint8Array> {
+  const stream = new CompressionStream('deflate-raw');
+  const writer = stream.writable.getWriter();
+  writer.write(data.buffer as ArrayBuffer);
+  writer.close();
+  const reader = stream.readable.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.length;
+  }
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) { result.set(c, offset); offset += c.length; }
+  return result;
+}
+
+async function decompressDeflate(data: Uint8Array): Promise<Uint8Array> {
+  const stream = new DecompressionStream('deflate-raw');
+  const writer = stream.writable.getWriter();
+  writer.write(data.buffer as ArrayBuffer);
+  writer.close();
+  const reader = stream.readable.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.length;
+  }
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) { result.set(c, offset); offset += c.length; }
+  return result;
+}
+
 async function handleShorten(request: Request): Promise<Response> {
   try {
     const body = await request.json() as { url: string };
@@ -237,9 +277,11 @@ async function handleShorten(request: Request): Promise<Response> {
 
     const key = await getAesKey();
     const iv = crypto.getRandomValues(new Uint8Array(12));
+    // 先 deflate 压缩，再加密，缩短 hash 长度
     const encoded = new TextEncoder().encode(targetUrl);
+    const compressed = await compressDeflate(encoded);
     const ciphertext = new Uint8Array(
-      await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded),
+      await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, compressed.buffer as ArrayBuffer),
     );
 
     // IV (12 bytes) + ciphertext 拼接后 base36 编码
@@ -274,7 +316,8 @@ async function handleRedirect(url: URL): Promise<Response> {
       ciphertext,
     );
 
-    const targetUrl = new TextDecoder().decode(plaintext);
+    const decompressed = await decompressDeflate(new Uint8Array(plaintext));
+    const targetUrl = new TextDecoder().decode(decompressed);
     if (!targetUrl.startsWith('http')) return new Response('Not Found', { status: 404 });
 
     return new Response(null, {
