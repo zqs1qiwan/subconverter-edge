@@ -75,11 +75,19 @@ export default function App() {
       // 验证后端可用
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      // 确认有内容
+      // 确认有内容（非 JSON error）
       const text = await resp.text();
-      if (!text || text.includes('"error"')) {
-        const j = JSON.parse(text);
-        throw new Error(j.error || '转换失败');
+      const ct = resp.headers.get('content-type') || '';
+      if (ct.includes('application/json') && text.includes('"error"')) {
+        try {
+          const j = JSON.parse(text);
+          throw new Error(j.error || '转换失败');
+        } catch (e: any) {
+          if (e.message) throw e;
+        }
+      }
+      if (!text || text.length < 10) {
+        throw new Error('后端返回空内容');
       }
       setGeneratedUrl(url);
       // 生成二维码
@@ -183,6 +191,9 @@ export default function App() {
             <Button variant="primary" onClick={handleGenerate} disabled={loading || !subUrl.trim()}>
               {loading ? <Loader size="sm" /> : '生成订阅链接'}
             </Button>
+            <Button variant="secondary" onClick={handleCopy} disabled={!generatedUrl}>
+              {copied ? '已复制' : '复制订阅地址'}
+            </Button>
           </div>
 
           {generatedUrl && (
@@ -201,11 +212,6 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <div className="actions-row">
-                <Button variant="secondary" onClick={handleCopy}>
-                  {copied ? '已复制' : '复制订阅地址'}
-                </Button>
-              </div>
             </div>
           )}
         </div>
