@@ -233,14 +233,17 @@ body::before {
 }
 
 .actions-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
 }
 
 .actions-row button {
+  width: 148px;
   height: 44px;
   border-radius: var(--radius-sm) !important;
+  flex: 0 0 auto;
 }
 
 .result-card {
@@ -299,8 +302,8 @@ body::before {
   .result-card {
     grid-template-columns: 1fr;
   }
-  .actions-row { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .actions-row button { padding-inline: 8px !important; font-size: 13px !important; }
+  .actions-row { gap: 8px; }
+  .actions-row button { width: 132px; padding-inline: 8px !important; font-size: 13px !important; }
   .qr-panel img {
     width: 220px;
     height: 220px;
@@ -310,5 +313,5 @@ body::before {
 @media (max-width: 420px) {
   .github-corner span { max-width: 9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .actions-row { gap: 8px; }
-  .actions-row button { font-size: 12px !important; }
+  .actions-row button { width: 124px; font-size: 12px !important; }
 }

@@ -1,5 +1,7 @@
 # SubconverterEdge
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/zqs1qiwan/subconverter-edge)
+
 Cloudflare Workers subscription converter with a React + Kumo frontend.
 
 ## Features
@@ -12,6 +14,14 @@ Cloudflare Workers subscription converter with a React + Kumo frontend.
 - Single Worker deployment: static frontend and `/sub` API
 
 ## Fork and deploy
+
+### One-click deploy
+
+Click the button at the top of this README. Cloudflare will clone the repository, create a Worker, run the build command, and deploy it to your account.
+
+After deployment, you can add a custom domain in the Cloudflare dashboard if needed.
+
+### Manual deploy
 
 Requirements:
 
@@ -31,12 +41,15 @@ For a fork:
 
 1. Fork this repository on GitHub.
 2. Clone your fork.
-3. Edit `wrangler.toml`:
-   - Set `name` if you want a different Worker name.
-   - Remove the `routes` section if you only want a `*.workers.dev` URL.
-   - Or replace the route with your own custom domain.
-4. Run `npm install && npm run build`.
-5. Run `npx wrangler deploy`.
+3. Run `npm install && npm run build`.
+4. Run `npx wrangler deploy`.
+5. Add a custom domain in Cloudflare Workers settings if needed.
+
+`wrangler.toml` does not include a default custom route. This keeps one-click deploy usable for any Cloudflare account. If you want to deploy from the CLI to a specific route, pass it explicitly:
+
+```bash
+npx wrangler deploy --route "sub.example.com/*"
+```
 
 The deployed frontend includes a "部署我自己的转换服务" badge in the top-right corner. It points to this upstream repository so users of forked deployments can find the source project.
 

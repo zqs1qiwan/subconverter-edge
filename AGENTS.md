@@ -36,11 +36,17 @@ npm run build
 
 ## Deploy
 
+Default deployment uses `*.workers.dev` because `wrangler.toml` intentionally has no custom route. This keeps Deploy to Cloudflare usable for forks.
+
 ```bash
 npx wrangler deploy
 ```
 
-If this repository is deployed from a CI or a fork, set Cloudflare credentials according to Wrangler documentation.
+Production custom route deployment:
+
+```bash
+npx wrangler deploy --route "sub.laobaitv.net/*"
+```
 
 ## Verification
 
