@@ -4,7 +4,6 @@ import type { TargetType } from './types';
 
 export interface Env {
   ASSETS: Fetcher;
-  SHORT_LINKS: KVNamespace;
 }
 
 const TARGET_TYPES: Record<string, TargetType> = {
@@ -55,9 +54,9 @@ export default {
       return new Response('subconverter-edge v1.1.0', { headers: { 'Content-Type': 'text/plain' } });
     }
 
-    // API: /api/shorten — 创建短链接
+    // API: /api/shorten — 创建短链接（加密编码，不存储）
     if (url.pathname === '/api/shorten' && request.method === 'POST') {
-      return handleShorten(request, env);
+      return handleShorten(request);
     }
 
     // API: /api/configs — 返回远程配置列表
@@ -72,9 +71,9 @@ export default {
       });
     }
 
-    // 短链接跳转: /s/<hash>
+    // 短链接跳转: /s/<hash> — 边缘解密，不查存储
     if (url.pathname.startsWith('/s/') && request.method === 'GET') {
-      return handleRedirect(url, env);
+      return handleRedirect(url);
     }
 
     // 静态资源
@@ -188,9 +187,52 @@ function mergeClashConfig(baseYaml: string, configIni: string): string {
   return configMarker + baseYaml;
 }
 
-// ── 短链接 ──
+// ── 短链接（无存储加密方案）──
+// 原始 URL 用 AES-GCM 加密，密文 base36 编码为短链 hash
+// 访问 /s/:hash 时在边缘解密并 302 跳转
+// 不使用 KV，不存储任何用户数据，链接永久有效
 
-async function handleShorten(request: Request, env: Env): Promise<Response> {
+const SECRET_KEY = 'subconverter-edge-v1'; // 固定密钥种子，fork 后可改
+
+async function getAesKey(): Promise<CryptoKey> {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(SECRET_KEY),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey'],
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode('subconv-salt'), iterations: 10000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+function bytesToBase36(bytes: Uint8Array): string {
+  // 每字节转 2 位 base36 (0-35 用 0-9a-z)，紧凑编码
+  const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+  let result = '';
+  for (const b of bytes) {
+    result += chars[b >> 4] + chars[b & 0xf];
+  }
+  return result;
+}
+
+function base36ToBytes(str: string): Uint8Array {
+  const bytes: number[] = [];
+  for (let i = 0; i < str.length; i += 2) {
+    const hi = parseInt(str[i], 36);
+    const lo = parseInt(str[i + 1], 36);
+    bytes.push((hi << 4) | lo);
+  }
+  return new Uint8Array(bytes);
+}
+
+async function handleShorten(request: Request): Promise<Response> {
   try {
     const body = await request.json() as { url: string };
     const targetUrl = body.url;
@@ -198,14 +240,21 @@ async function handleShorten(request: Request, env: Env): Promise<Response> {
       return jsonError('Invalid URL');
     }
 
-    // 生成 8 位哈希
-    const hash = await generateHash(targetUrl);
+    const key = await getAesKey();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(targetUrl);
+    const ciphertext = new Uint8Array(
+      await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded),
+    );
 
-    // 存入 KV，30 天过期
-    await env.SHORT_LINKS.put(hash, targetUrl, { expirationTtl: 2592000 });
+    // IV (12 bytes) + ciphertext 拼接后 base36 编码
+    const combined = new Uint8Array(iv.length + ciphertext.length);
+    combined.set(iv, 0);
+    combined.set(ciphertext, iv.length);
+    const hash = bytesToBase36(combined);
 
     const shortUrl = `${new URL(request.url).origin}/s/${hash}`;
-    return new Response(JSON.stringify({ short: shortUrl, hash }), {
+    return new Response(JSON.stringify({ short: shortUrl }), {
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
   } catch (e: any) {
@@ -213,25 +262,33 @@ async function handleShorten(request: Request, env: Env): Promise<Response> {
   }
 }
 
-async function handleRedirect(url: URL, env: Env): Promise<Response> {
+async function handleRedirect(url: URL): Promise<Response> {
   const hash = url.pathname.slice(3);
-  if (!hash) return new Response('Not Found', { status: 404 });
+  if (!hash || hash.length < 4) return new Response('Not Found', { status: 404 });
 
-  const target = await env.SHORT_LINKS.get(hash);
-  if (!target) return new Response('Not Found', { status: 404 });
+  try {
+    const combined = base36ToBytes(hash);
+    if (combined.length < 13) return new Response('Not Found', { status: 404 });
 
-  return new Response(null, {
-    status: 302,
-    headers: { Location: target, ...CORS_HEADERS },
-  });
-}
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+    const key = await getAesKey();
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      ciphertext,
+    );
 
-async function generateHash(input: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(input + Date.now().toString());
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.slice(0, 4).map(b => b.toString(36)).join('').padEnd(8, '0').slice(0, 8);
+    const targetUrl = new TextDecoder().decode(plaintext);
+    if (!targetUrl.startsWith('http')) return new Response('Not Found', { status: 404 });
+
+    return new Response(null, {
+      status: 302,
+      headers: { Location: targetUrl, ...CORS_HEADERS },
+    });
+  } catch {
+    return new Response('Not Found', { status: 404 });
+  }
 }
 
 function jsonError(msg: string): Response {

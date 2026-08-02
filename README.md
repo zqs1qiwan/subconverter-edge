@@ -12,7 +12,7 @@ Cloudflare Workers 订阅转换服务，前端使用 React + Kumo，后端在同
 - 远程配置选择（ACL4SSR 规则模板，仅 Clash）
 - 节点类型过滤（包含 / 排除）
 - Emoji 国旗
-- 短链接生成（SHA-256 哈希，KV 存储，30 天有效）
+- 短链接生成（AES-GCM 加密编码到 hash 本身，不存储用户数据，永久有效）
 - URL 参数预填（支持 `?url=&target=&backend=` 直接打开）
 - 高级选项折叠
 - 单 Worker 部署，前端和 API 一体
@@ -21,7 +21,7 @@ Cloudflare Workers 订阅转换服务，前端使用 React + Kumo，后端在同
 
 点击 README 顶部的 Deploy to Cloudflare 按钮，Cloudflare 会自动克隆仓库、创建 Worker、构建并部署到你的账号。
 
-KV namespace 会在部署时自动创建，用于短链接存储。
+短链接功能使用 AES-GCM 加密编码，不依赖 KV 存储，无需额外配置。
 
 部署后可在 Cloudflare Dashboard 绑定自定义域名。
 
@@ -79,7 +79,7 @@ Content-Type: application/json
 
 返回 `{ "short": "https://your-worker.workers.dev/s/xxxxxx" }`
 
-访问 `/s/xxxxxx` 会 302 跳转到原始订阅地址。
+访问 `/s/xxxxxx` 会 302 跳转到原始订阅地址。短链 hash 包含 AES-GCM 加密的原始 URL，在边缘解密，不存储在任何数据库或 KV 中。
 
 ### 远程配置列表
 
