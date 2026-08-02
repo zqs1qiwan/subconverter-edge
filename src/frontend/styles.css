@@ -20,11 +20,7 @@
 
 * { box-sizing: border-box; }
 
-html,
-body,
-#root {
-  min-height: 100%;
-}
+html, body, #root { min-height: 100%; }
 
 body {
   margin: 0;
@@ -41,10 +37,14 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background-image: linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-image:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
   background-size: 42px 42px;
   mask-image: linear-gradient(to bottom, rgba(0,0,0,0.78), transparent 78%);
 }
+
+/* ── Layout ── */
 
 .app-shell {
   position: relative;
@@ -64,7 +64,7 @@ body::before {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 8px 11px;
+  padding: 8px 14px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(16, 18, 23, 0.72);
@@ -117,6 +117,8 @@ body::before {
   line-height: 1.8;
 }
 
+/* ── Card ── */
+
 .converter-card,
 .result-card {
   border: 1px solid var(--line);
@@ -132,6 +134,8 @@ body::before {
   flex-direction: column;
   gap: 18px;
 }
+
+/* ── Fields ── */
 
 .field-group {
   min-width: 0;
@@ -174,6 +178,7 @@ body::before {
   color: var(--text) !important;
   border: 1px solid var(--line) !important;
   box-shadow: none !important;
+  outline: none;
 }
 
 .converter-card input:focus {
@@ -183,9 +188,9 @@ body::before {
 
 .converter-card input::placeholder { color: var(--muted-soft) !important; }
 
-.native-select-wrapper {
-  position: relative;
-}
+/* ── Select ── */
+
+.native-select-wrapper { position: relative; }
 
 .native-select-wrapper::after {
   content: '';
@@ -212,7 +217,7 @@ body::before {
   appearance: none;
   cursor: pointer;
   font-size: 14px;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .native-select:focus {
@@ -225,6 +230,44 @@ body::before {
   color: var(--text);
 }
 
+/* ── Advanced toggle ── */
+
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.18s ease;
+  align-self: flex-start;
+}
+
+.advanced-toggle:hover { color: var(--accent-strong); }
+
+.advanced-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s ease;
+}
+
+.advanced-toggle .chevron-open { transform: rotate(180deg); }
+
+.advanced-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 2px;
+}
+
 .options-row {
   display: flex;
   align-items: center;
@@ -232,19 +275,66 @@ body::before {
   color: var(--muted);
 }
 
+/* ── Action buttons (native, not Kumo) ── */
+
 .actions-row {
   display: flex;
   justify-content: center;
-  align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.actions-row button {
-  width: 148px;
+.btn-primary,
+.btn-secondary {
   height: 44px;
-  border-radius: var(--radius-sm) !important;
-  flex: 0 0 auto;
+  min-width: 140px;
+  padding: 0 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  white-space: nowrap;
 }
+
+.btn-primary {
+  background: var(--accent);
+  color: #0b0d10;
+  border-color: var(--accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-primary:active:not(:disabled),
+.btn-secondary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ── Result ── */
 
 .result-card {
   padding: 18px;
@@ -292,6 +382,8 @@ body::before {
   background: #fff;
 }
 
+/* ── Responsive ── */
+
 @media (max-width: 720px) {
   .app-shell { padding: 54px 14px 36px; }
   .github-corner { top: 12px; right: 12px; }
@@ -302,8 +394,8 @@ body::before {
   .result-card {
     grid-template-columns: 1fr;
   }
-  .actions-row { gap: 8px; }
-  .actions-row button { width: 132px; padding-inline: 8px !important; font-size: 13px !important; }
+  .actions-row { gap: 10px; }
+  .btn-primary, .btn-secondary { min-width: 130px; padding: 0 16px; font-size: 13px; }
   .qr-panel img {
     width: 220px;
     height: 220px;
@@ -313,5 +405,5 @@ body::before {
 @media (max-width: 420px) {
   .github-corner span { max-width: 9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .actions-row { gap: 8px; }
-  .actions-row button { width: 124px; font-size: 12px !important; }
+  .btn-primary, .btn-secondary { min-width: 120px; padding: 0 12px; font-size: 12px; }
 }
