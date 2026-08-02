@@ -38,7 +38,7 @@ For a fork:
 4. Run `npm install && npm run build`.
 5. Run `npx wrangler deploy`.
 
-The deployed frontend includes a GitHub badge in the top-right corner. It points to this upstream repository so users of forked deployments can find the source project.
+The deployed frontend includes a "部署我自己的转换服务" badge in the top-right corner. It points to this upstream repository so users of forked deployments can find the source project.
 
 ## Usage
 

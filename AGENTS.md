@@ -22,10 +22,10 @@ SubconverterEdge is a Cloudflare Workers subscription converter. The Worker serv
 | Item | Value |
 |---|---|
 | UI title | `SubconverterEdge 在线订阅转换` |
-| GitHub badge | Fixed top-right badge pointing to upstream repository |
+| GitHub badge | Fixed top-right `部署我自己的转换服务` badge pointing to upstream repository |
 | Targets | `clash`, `singbox`, `shadowrocket`, `v2ray`, `trojan`, `ss`, `mixed` |
 | QR code | Enabled for `shadowrocket`, `v2ray`, `trojan`, `ss`, `mixed` |
-| Default backend | Current Worker origin |
+| Default backend | 本站服务（current Worker origin） |
 
 ## Development
 

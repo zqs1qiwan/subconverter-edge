@@ -150,6 +150,13 @@ body::before {
   font-weight: 600;
 }
 
+.field-hint {
+  margin: 0;
+  color: var(--muted-soft);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -289,12 +296,19 @@ body::before {
   .hero-copy { padding-top: 8px; }
   .converter-card { padding: 18px; border-radius: 18px; }
   .field-grid,
-  .actions-row,
   .result-card {
     grid-template-columns: 1fr;
   }
+  .actions-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .actions-row button { padding-inline: 8px !important; font-size: 13px !important; }
   .qr-panel img {
     width: 220px;
     height: 220px;
   }
+}
+
+@media (max-width: 420px) {
+  .github-corner span { max-width: 9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .actions-row { gap: 8px; }
+  .actions-row button { font-size: 12px !important; }
 }

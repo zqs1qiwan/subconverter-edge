@@ -9,7 +9,7 @@ const GITHUB_URL = 'https://github.com/zqs1qiwan/subconverter-edge';
 const TARGETS = [
   { value: 'clash', label: 'Clash' },
   { value: 'singbox', label: 'Sing-Box' },
-  { value: 'shadowrocket', label: 'Shadowrocket' },
+  { value: 'shadowrocket', label: 'Shadowrocket（小火箭）' },
   { value: 'v2ray', label: 'V2Ray' },
   { value: 'trojan', label: 'Trojan' },
   { value: 'ss', label: 'Shadowsocks' },
@@ -17,8 +17,8 @@ const TARGETS = [
 ];
 
 const BACKEND_OPTIONS = [
-  { value: '', label: 'Current Worker' },
-  { value: 'https://api.v1.mk', label: 'api.v1.mk' },
+  { value: '', label: '本站服务' },
+  { value: 'https://api.v1.mk', label: 'api.v1.mk（肥羊增强型后端）' },
 ];
 
 const QR_TARGETS = new Set(['shadowrocket', 'v2ray', 'ss', 'trojan', 'mixed']);
@@ -111,7 +111,7 @@ export default function App() {
   return (
     <main className="app-shell">
       <a className="github-corner" href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository">
-        <span>GitHub</span>
+        <span>部署我自己的转换服务</span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg>
       </a>
 
@@ -137,8 +137,9 @@ export default function App() {
                 setCopied(false);
                 setError('');
               }}
-              placeholder="https://example.com/sub"
+              placeholder="支持订阅链接或单节点链接，多个链接用 | 分隔"
             />
+            <p className="field-hint">支持 SS / SSR / VMess / VLESS / Trojan / Hysteria2 / Clash 订阅。</p>
           </div>
 
           <div className="field-grid">
