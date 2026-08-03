@@ -2,7 +2,7 @@
 
 ## Overview
 
-Cloudflare Workers subscription converter. Single Worker serves React + Kumo frontend and `/sub` conversion API. Short links use AES-GCM encryption encoded in the hash itself — no KV, no database, no stored user data.
+Cloudflare Workers subscription converter. Single Worker serves React + Kumo frontend and `/sub` conversion API. Short links use SHA-256 deterministic hash with KV storage (365-day TTL).
 
 ## Files
 
@@ -28,7 +28,7 @@ Cloudflare Workers subscription converter. Single Worker serves React + Kumo fro
 | Targets | `clash`, `singbox`, `shadowrocket`, `v2ray`, `trojan`, `ss`, `mixed` |
 | QR code | `shadowrocket`, `v2ray`, `trojan`, `ss`, `mixed` |
 | Remote config | ACL4SSR templates, Clash only |
-| Short link | AES-GCM encrypted, encoded in hash, no storage, permanent |
+| Short link | SHA-256 deterministic hash, 10 chars, KV storage, 365-day TTL |
 | URL prefill | `?url=&target=&backend=&emoji=&include=&exclude=&config=` |
 | Backend options | `本站服务`, `api.v1.mk（肥羊增强型后端）` |
 | Advanced | Collapsible: remote config, include, exclude, emoji |

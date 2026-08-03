@@ -12,7 +12,7 @@ Cloudflare Workers 订阅转换服务，前端使用 React + Kumo，后端在同
 - 远程配置选择（ACL4SSR 规则模板，仅 Clash）
 - 节点类型过滤（包含 / 排除）
 - Emoji 国旗
-- 短链接生成（AES-GCM 加密编码到 hash 本身，不存储用户数据，永久有效）
+- 短链接生成（SHA-256 确定性 hash，同一链接始终生成同一短链，KV 存储 365 天有效，到期自动清理）
 - URL 参数预填（支持 `?url=&target=&backend=` 直接打开）
 - 高级选项折叠
 - 单 Worker 部署，前端和 API 一体
@@ -21,7 +21,9 @@ Cloudflare Workers 订阅转换服务，前端使用 React + Kumo，后端在同
 
 点击 README 顶部的 Deploy to Cloudflare 按钮，Cloudflare 会自动克隆仓库、创建 Worker、构建并部署到你的账号。
 
-短链接功能使用 AES-GCM 加密编码，不依赖 KV 存储，无需额外配置。
+短链接功能使用 KV 存储，需要在 Cloudflare 账号中创建 KV namespace。点击 Deploy to Cloudflare 按钮时会自动创建。
+
+> **隐私说明**：短链接的原始订阅地址会映射存储到 Cloudflare KV 中，有效期 365 天，到期后自动清理。同一订阅链接始终生成同一个短链接，不会产生重复。用户在使用短链接功能前请自行评估隐私风险。
 
 部署后可在 Cloudflare Dashboard 绑定自定义域名。
 
@@ -79,7 +81,7 @@ Content-Type: application/json
 
 返回 `{ "short": "https://your-worker.workers.dev/s/xxxxxx" }`
 
-访问 `/s/xxxxxx` 会 302 跳转到原始订阅地址。短链 hash 包含 AES-GCM 加密的原始 URL，在边缘解密，不存储在任何数据库或 KV 中。
+访问 `/s/xxxxxx` 会 302 跳转到原始订阅地址。短链接通过 SHA-256 确定性 hash 生成，同一订阅链接始终映射到同一个短链接，不会产生重复。原始订阅地址存储在 Cloudflare KV 中，有效期 365 天，到期后自动清理。
 
 ### 远程配置列表
 
@@ -143,7 +145,7 @@ Cloudflare Workers subscription converter with a React + Kumo frontend and backe
 - Remote config selection (ACL4SSR rule templates, Clash only)
 - Node type filtering (include / exclude)
 - Emoji flags
-- Short link generation (SHA-256 hash, KV storage, 30-day TTL)
+- Short link generation (SHA-256 deterministic hash, same URL always maps to same short link, KV storage 365-day TTL)
 - URL parameter prefill (`?url=&target=&backend=`)
 - Advanced options collapsible
 - Single Worker deployment
@@ -153,6 +155,8 @@ Cloudflare Workers subscription converter with a React + Kumo frontend and backe
 Click the Deploy to Cloudflare button at the top of this README. Cloudflare will clone the repo, create the Worker, build, and deploy to your account.
 
 A KV namespace is automatically provisioned for short link storage.
+
+> **Privacy note**: The original subscription URL is stored in Cloudflare KV for 365 days, then automatically cleaned up. The same subscription link always maps to the same short link. Users should evaluate privacy risks before using the short link feature.
 
 After deployment, you can add a custom domain in the Cloudflare dashboard.
 
@@ -210,7 +214,7 @@ Content-Type: application/json
 
 Returns `{ "short": "https://your-worker.workers.dev/s/xxxxxx" }`
 
-Visiting `/s/xxxxxx` redirects 302 to the original subscription URL.
+Visiting `/s/xxxxxx` redirects 302 to the original subscription URL. Short links use SHA-256 deterministic hashing — the same subscription URL always maps to the same short link. The original URL is stored in Cloudflare KV with a 365-day TTL, then automatically cleaned up.
 
 ## License
 
