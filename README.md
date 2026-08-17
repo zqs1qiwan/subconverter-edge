@@ -17,21 +17,45 @@ Cloudflare Workers 订阅转换服务，前端使用 React + Kumo，后端在同
 - 高级选项折叠
 - 单 Worker 部署，前端和 API 一体
 
-## 一键部署
+## 部署
 
-点击 README 顶部的 Deploy to Cloudflare 按钮，Cloudflare 会自动克隆仓库、创建 Worker、构建并部署到你的账号。
+### 方式一：一键部署
 
-短链接功能使用 KV 存储，需要在 Cloudflare 账号中创建 KV namespace。点击 Deploy to Cloudflare 按钮时会自动创建。
+点击 README 顶部的 Deploy to Cloudflare 按钮，Cloudflare 会自动克隆仓库、创建 Worker、构建并部署到你的账号。KV namespace 也会自动创建。
 
 > **隐私说明**：短链接的原始订阅地址会映射存储到 Cloudflare KV 中，有效期 365 天，到期后自动清理。同一订阅链接始终生成同一个短链接，不会产生重复。用户在使用短链接功能前请自行评估隐私风险。
 
-部署后可在 Cloudflare Dashboard 绑定自定义域名。
+### 方式二：Workers Builds 自动部署
 
-## 手动部署
+在 Cloudflare Dashboard 中将你的 fork 仓库连接到 Worker：
+
+1. 进入 Workers & Pages → 选择你的 Worker → Settings → Build
+2. 连接 GitHub 仓库，选择你的 fork
+3. 设置 Build command（将 `YOUR_KV_ID` 替换为你创建的 KV namespace ID）：
+   ```
+   sed -i "s/REPLACE_WITH_YOUR_KV_ID/YOUR_KV_ID/g" wrangler.toml && npm ci && npm run build
+   ```
+4. Deploy command 保持默认：`npx wrangler deploy`
+
+之后每次 push 到 main 分支会自动触发构建和部署。
+
+### 方式三：手动部署
 
 ```bash
 git clone https://github.com/zqs1qiwan/subconverter-edge.git
 cd subconverter-edge
+```
+
+创建 KV namespace 并替换 `wrangler.toml` 中的 `REPLACE_WITH_YOUR_KV_ID`：
+
+```bash
+# 创建 KV namespace，记下返回的 ID
+npx wrangler kv namespace create SHORT_LINKS
+
+# 将 wrangler.toml 中的 REPLACE_WITH_YOUR_KV_ID 替换为你的 KV namespace ID
+# 也可以用 sed：
+# sed -i "s/REPLACE_WITH_YOUR_KV_ID/<你的KV_ID>/g" wrangler.toml
+
 npm install
 npm run build
 npx wrangler deploy
@@ -150,21 +174,45 @@ Cloudflare Workers subscription converter with a React + Kumo frontend and backe
 - Advanced options collapsible
 - Single Worker deployment
 
-## One-click deploy
+## Deployment
 
-Click the Deploy to Cloudflare button at the top of this README. Cloudflare will clone the repo, create the Worker, build, and deploy to your account.
+### Option 1: One-click deploy
 
-A KV namespace is automatically provisioned for short link storage.
+Click the Deploy to Cloudflare button at the top of this README. Cloudflare will clone the repo, create the Worker, build, and deploy to your account. The KV namespace is automatically provisioned.
 
 > **Privacy note**: The original subscription URL is stored in Cloudflare KV for 365 days, then automatically cleaned up. The same subscription link always maps to the same short link. Users should evaluate privacy risks before using the short link feature.
 
-After deployment, you can add a custom domain in the Cloudflare dashboard.
+### Option 2: Workers Builds auto-deploy
 
-## Manual deploy
+Connect your fork to your Worker via Cloudflare Dashboard:
+
+1. Go to Workers & Pages → select your Worker → Settings → Build
+2. Connect your GitHub repository and select your fork
+3. Set the Build command (replace `YOUR_KV_ID` with your KV namespace ID):
+   ```
+   sed -i "s/REPLACE_WITH_YOUR_KV_ID/YOUR_KV_ID/g" wrangler.toml && npm ci && npm run build
+   ```
+4. Keep the default Deploy command: `npx wrangler deploy`
+
+Future pushes to the main branch will automatically trigger builds and deploys.
+
+### Option 3: Manual deploy
 
 ```bash
 git clone https://github.com/zqs1qiwan/subconverter-edge.git
 cd subconverter-edge
+```
+
+Create a KV namespace and replace `REPLACE_WITH_YOUR_KV_ID` in `wrangler.toml`:
+
+```bash
+# Create a KV namespace, note the returned ID
+npx wrangler kv namespace create SHORT_LINKS
+
+# Replace REPLACE_WITH_YOUR_KV_ID in wrangler.toml with your KV namespace ID
+# Or use sed:
+# sed -i "s/REPLACE_WITH_YOUR_KV_ID/<YOUR_KV_ID>/g" wrangler.toml
+
 npm install
 npm run build
 npx wrangler deploy
