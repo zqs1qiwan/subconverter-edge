@@ -7,9 +7,11 @@ compatibility_flags = ["nodejs_compat"]
 directory = "./dist"
 binding = "ASSETS"
 
+# KV namespace ID — replace with your own (Cloudflare Dashboard > Workers and Pages > KV)
+# Forks: set the KV_ID secret in GitHub repo settings, or create your own KV namespace
 [[kv_namespaces]]
 binding = "SHORT_LINKS"
-id = "subconverter_edge_short_links"
+id = "REPLACE_WITH_YOUR_KV_ID"
 
 [observability]
 enabled = true
