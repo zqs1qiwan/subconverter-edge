@@ -189,21 +189,24 @@ function parseHysteria2(uri: string): ProxyNode | null {
 
 // 解析 Shadowrocket STATUS= 行
 // 格式: 🚀↑:0.07GB,↓:6.11GB,TOT:800GB💡Expires:2027-07-10
+// 用逗号分割后逐段匹配，避免 emoji regex 兼容性问题
 function parseStatusLine(line: string): SubscriptionInfo | undefined {
   try {
     const result: SubscriptionInfo = { upload: 0, download: 0, total: 0, expire: 0 };
-    // 提取上传: ↑:X.GB
-    const upMatch = line.match(/↑:([\d.]+)\s*(\w+)/);
-    if (upMatch) result.upload = parseSize(upMatch[1], upMatch[2]);
-    // 提取下载: ↓:X.GB
-    const downMatch = line.match(/↓:([\d.]+)\s*(\w+)/);
-    if (downMatch) result.download = parseSize(downMatch[1], downMatch[2]);
-    // 提取总量: TOT:X.GB
-    const totMatch = line.match(/TOT:([\d.]+)\s*(\w+)/);
-    if (totMatch) result.total = parseSize(totMatch[1], totMatch[2]);
-    // 提取过期时间: Expires:YYYY-MM-DD
-    const expMatch = line.match(/Expires:(\d{4}-\d{2}-\d{2})/);
-    if (expMatch) result.expire = Math.floor(new Date(expMatch[1]).getTime() / 1000);
+    const parts = line.split(',');
+    for (const part of parts) {
+      // 匹配 key:value+unit 格式
+      const m = part.match(/:([\d.]+)\s*(\w+)/);
+      if (!m) continue;
+      const val = parseSize(m[1], m[2]);
+      if (part.includes('TOT') || part.includes('TOTAL')) result.total = val;
+      else if (part.includes('Expires:')) {
+        const expMatch = part.match(/Expires:(\d{4}-\d{2}-\d{2})/);
+        if (expMatch) result.expire = Math.floor(new Date(expMatch[1]).getTime() / 1000);
+      }
+      else if (part.includes('\u2191') || part.toUpperCase().includes('UP')) result.upload = val;
+      else if (part.includes('\u2193') || part.toUpperCase().includes('DOWN')) result.download = val;
+    }
     return result;
   } catch {
     return undefined;
