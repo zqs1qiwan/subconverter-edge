@@ -140,6 +140,8 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
       // 从响应头解析订阅信息（流量、订阅名）
       const headerSubInfo = parseSubInfo(resp.headers);
       if (headerSubInfo && !subInfo) subInfo = headerSubInfo;
+      const disposition = resp.headers.get('content-disposition');
+      if (disposition && !subTitle) {
         const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
         if (match) subTitle = decodeURIComponent(match[1].replace(/["']/g, ''));
       }
