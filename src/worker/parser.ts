@@ -278,8 +278,18 @@ function parseInlineYaml(str: string): Record<string, any> {
   let s = str.trim();
   if (s.startsWith('{') && s.endsWith('}')) s = s.slice(1, -1);
   const result: Record<string, any> = {};
-  // 简易逗号分割 (不处理嵌套)
-  const parts = s.split(',').map(p => p.trim());
+  // 逗号分割，但跳过嵌套 { } 内的逗号
+  const parts: string[] = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '{') depth++;
+    else if (s[i] === '}') depth--;
+    else if (s[i] === ',' && depth === 0) {
+      parts.push(s.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(s.slice(start));
   for (const p of parts) {
     const idx = p.indexOf(':');
     if (idx === -1) continue;
@@ -288,6 +298,10 @@ function parseInlineYaml(str: string): Record<string, any> {
     if (val === 'true') val = true as any;
     else if (val === 'false') val = false as any;
     else if (!isNaN(Number(val))) val = Number(val) as any;
+    else if (val.startsWith('{') && val.endsWith('}')) {
+      // 递归解析嵌套对象
+      try { val = parseInlineYaml(val) as any; } catch { /* keep string */ }
+    }
     result[key] = val;
   }
   return result;

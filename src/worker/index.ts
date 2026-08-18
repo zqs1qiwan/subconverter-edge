@@ -25,6 +25,16 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers': '*',
 };
 
+// 可选 User-Agent 列表，用于请求上游订阅
+// 不同机场可能根据 UA 返回不同格式和响应头
+const UA_OPTIONS: Record<string, string> = {
+  clash: 'clash.meta',
+  singbox: 'sing-box',
+  shadowrocket: 'Shadowrocket/1900 CFNetwork/1410 Darwin/22.0.0',
+  v2ray: 'v2rayN',
+  default: 'clash.meta',
+};
+
 // 远程配置 URL（Clash/Sing-Box 用户常用的公开配置模板）
 const REMOTE_CONFIGS: Record<string, string> = {
   'default': '',
@@ -93,6 +103,9 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   const includeNodeTypes = url.searchParams.get('include') || '';
   const excludeNodeTypes = url.searchParams.get('exclude') || '';
   const remoteConfig = url.searchParams.get('config') || '';
+  const uaKey = url.searchParams.get('ua') || 'clash';
+  const customName = url.searchParams.get('name') || '';
+  const userAgent = UA_OPTIONS[uaKey] || UA_OPTIONS['default'];
 
   if (!subUrl) {
     return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
@@ -105,6 +118,7 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   let allNodes: any[] = [];
   let subInfo: any = undefined;
   let subTitle: string | undefined = undefined;
+  let profileUpdateInterval: string | undefined = undefined;
 
   const urls = subUrl.split('|').filter(u => u.trim());
 
@@ -117,7 +131,7 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
     }
     try {
       const resp = await fetch(trimmed, {
-        headers: { 'User-Agent': 'clash.meta' },
+        headers: { 'User-Agent': userAgent },
       });
       const content = await resp.text();
       const result = parseSubscription(content, resp.headers.get('content-type') || '');
@@ -130,6 +144,10 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
       if (disposition && !subTitle) {
         const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
         if (match) subTitle = decodeURIComponent(match[1].replace(/["']/g, ''));
+      }
+      if (!profileUpdateInterval) {
+        const interval = resp.headers.get('profile-update-interval');
+        if (interval) profileUpdateInterval = interval;
       }
     } catch {
       // ignore
@@ -185,10 +203,11 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   if (subInfo) {
     responseHeaders['subscription-userinfo'] = `upload=${subInfo.upload}; download=${subInfo.download}; total=${subInfo.total}; expire=${subInfo.expire}`;
   }
+  if (customName) subTitle = customName;
   if (subTitle) {
     responseHeaders['content-disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(subTitle)}`;
   }
-  responseHeaders['profile-update-interval'] = '24';
+  responseHeaders['profile-update-interval'] = profileUpdateInterval || '24';
 
   return new Response(finalOutput, { headers: responseHeaders });
 }

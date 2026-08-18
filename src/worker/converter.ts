@@ -45,6 +45,7 @@ export function toClash(nodes: ProxyNode[]): string {
         p.network = n.network || 'tcp';
         p.tls = n.tls || false;
         if (n.sni) p.sni = n.sni;
+        if (n.insecure) p['skip-cert-verify'] = true;
         if (n.network === 'ws') {
           p['ws-opts'] = { path: n.path || '/', headers: { Host: n.host || n.server } };
         }
@@ -56,6 +57,7 @@ export function toClash(nodes: ProxyNode[]): string {
         p.tls = n.tls || false;
         if (n.sni) p.sni = n.sni;
         if (n.flow) p.flow = n.flow;
+        if (n.insecure) p['skip-cert-verify'] = true;
         if (n.realityOpts) {
           p['reality-opts'] = {
             'public-key': n.realityOpts.publicKey,
@@ -70,6 +72,8 @@ export function toClash(nodes: ProxyNode[]): string {
       case 'trojan':
         p.password = n.password;
         p.sni = n.sni || n.server;
+        p.tls = true;
+        p['skip-cert-verify'] = n.insecure || false;
         p.udp = true;
         if (n.network === 'ws') {
           p['ws-opts'] = { path: n.path || '/', headers: { Host: n.host || n.server } };
@@ -119,12 +123,14 @@ export function toSingBox(nodes: ProxyNode[]): string {
         }
         if (n.tls) {
           ob.tls = { enabled: true, server_name: n.sni || n.server };
+          if (n.insecure) ob.tls.insecure = true;
         }
         break;
       case 'vless':
         ob.uuid = n.uuid;
         if (n.tls) {
           ob.tls = { enabled: true, server_name: n.sni || n.server };
+          if (n.insecure) ob.tls.insecure = true;
           if (n.realityOpts) {
             ob.tls.reality = { enabled: true, public_key: n.realityOpts.publicKey, short_id: n.realityOpts.shortId };
           }
@@ -138,6 +144,7 @@ export function toSingBox(nodes: ProxyNode[]): string {
       case 'trojan':
         ob.password = n.password;
         ob.tls = { enabled: true, server_name: n.sni || n.server };
+        if (n.insecure) ob.tls.insecure = true;
         break;
       case 'ssr':
         // Sing-Box 不支持 SSR，跳过

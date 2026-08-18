@@ -21,6 +21,13 @@ const BACKEND_OPTIONS = [
   { value: 'https://api.v1.mk', label: 'api.v1.mk（肥羊增强型后端）' },
 ];
 
+const UA_OPTIONS = [
+  { value: 'clash', label: 'Clash (默认)' },
+  { value: 'singbox', label: 'Sing-Box' },
+  { value: 'shadowrocket', label: 'Shadowrocket' },
+  { value: 'v2ray', label: 'V2Ray' },
+];
+
 const REMOTE_CONFIGS = [
   { value: '', label: '不使用' },
   { value: 'clash-ruleset-a', label: 'ACL4SSR Online' },
@@ -42,6 +49,8 @@ export default function App() {
   const [include, setInclude] = useState('');
   const [exclude, setExclude] = useState('');
   const [remoteConfig, setRemoteConfig] = useState('');
+  const [ua, setUa] = useState('clash');
+  const [subName, setSubName] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -62,6 +71,8 @@ export default function App() {
     if (params.get('include')) setInclude(params.get('include')!);
     if (params.get('exclude')) setExclude(params.get('exclude')!);
     if (params.get('config')) setRemoteConfig(params.get('config')!);
+    if (params.get('ua')) setUa(params.get('ua')!);
+    if (params.get('name')) setSubName(params.get('name')!);
   }, []);
 
   const buildUrl = useCallback(() => {
@@ -75,9 +86,11 @@ export default function App() {
     if (include.trim()) params.set('include', include.trim());
     if (exclude.trim()) params.set('exclude', exclude.trim());
     if (remoteConfig) params.set('config', remoteConfig);
+    if (ua !== 'clash') params.set('ua', ua);
+    if (subName.trim()) params.set('name', subName.trim());
 
     return `${backend || window.location.origin}/sub?${params.toString()}`;
-  }, [subUrl, target, backend, emoji, include, exclude, remoteConfig]);
+  }, [subUrl, target, backend, emoji, include, exclude, remoteConfig, ua, subName]);
 
   const resetResult = () => {
     setGeneratedUrl('');
@@ -249,6 +262,24 @@ export default function App() {
                   <label className="field-label" htmlFor="exclude">排除节点</label>
                   <Input id="exclude" value={exclude} onChange={(e: any) => { setExclude(e.target.value); resetResult(); }} placeholder="ssr" />
                 </div>
+              </div>
+
+              {/* 订阅名称 */}
+              <div className="field-group">
+                <label className="field-label" htmlFor="subname">订阅名称</label>
+                <Input id="subname" value={subName} onChange={(e: any) => { setSubName(e.target.value); resetResult(); }} placeholder="留空则使用原始订阅名" />
+                <p className="field-hint">自定义导入客户端后显示的订阅名称</p>
+              </div>
+
+              {/* 请求 UA */}
+              <div className="field-group">
+                <label className="field-label" htmlFor="ua">请求 User-Agent</label>
+                <div className="native-select-wrapper">
+                  <select id="ua" className="native-select" value={ua} onChange={(e) => { setUa(e.target.value); resetResult(); }}>
+                    {UA_OPTIONS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                  </select>
+                </div>
+                <p className="field-hint">影响上游订阅返回的格式和响应头，默认 Clash 兼容</p>
               </div>
 
               {/* Emoji */}
