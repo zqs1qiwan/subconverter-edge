@@ -187,6 +187,40 @@ function parseHysteria2(uri: string): ProxyNode | null {
   }
 }
 
+// 解析 Shadowrocket STATUS= 行
+// 格式: 🚀↑:0.07GB,↓:6.11GB,TOT:800GB💡Expires:2027-07-10
+function parseStatusLine(line: string): SubscriptionInfo | undefined {
+  try {
+    const result: SubscriptionInfo = { upload: 0, download: 0, total: 0, expire: 0 };
+    // 提取上传: ↑:X.GB
+    const upMatch = line.match(/↑:([\d.]+)\s*(\w+)/);
+    if (upMatch) result.upload = parseSize(upMatch[1], upMatch[2]);
+    // 提取下载: ↓:X.GB
+    const downMatch = line.match(/↓:([\d.]+)\s*(\w+)/);
+    if (downMatch) result.download = parseSize(downMatch[1], downMatch[2]);
+    // 提取总量: TOT:X.GB
+    const totMatch = line.match(/TOT:([\d.]+)\s*(\w+)/);
+    if (totMatch) result.total = parseSize(totMatch[1], totMatch[2]);
+    // 提取过期时间: Expires:YYYY-MM-DD
+    const expMatch = line.match(/Expires:(\d{4}-\d{2}-\d{2})/);
+    if (expMatch) result.expire = Math.floor(new Date(expMatch[1]).getTime() / 1000);
+    return result;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseSize(val: string, unit: string): number {
+  const num = parseFloat(val);
+  const u = unit.toUpperCase();
+  if (u === 'B') return Math.floor(num);
+  if (u === 'KB') return Math.floor(num * 1024);
+  if (u === 'MB') return Math.floor(num * 1024 * 1024);
+  if (u === 'GB') return Math.floor(num * 1024 * 1024 * 1024);
+  if (u === 'TB') return Math.floor(num * 1024 * 1024 * 1024 * 1024);
+  return Math.floor(num);
+}
+
 // 主解析函数
 export function parseSubscription(content: string, contentType: string): ParseResult {
   let text = content.trim();
@@ -207,8 +241,14 @@ export function parseSubscription(content: string, contentType: string): ParseRe
   // 按行解析 URI (清理 \r\n)
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
   const nodes: ProxyNode[] = [];
+  let subInfo: SubscriptionInfo | undefined;
 
   for (const line of lines) {
+    // Shadowrocket 格式: STATUS=🚀↑:0.07GB,↓:6.11GB,TOT:800GB💡Expires:2027-07-10
+    if (line.startsWith('STATUS=')) {
+      subInfo = parseStatusLine(line.slice(7));
+      continue;
+    }
     let node: ProxyNode | null = null;
     if (line.startsWith('ss://')) node = parseSS(line);
     else if (line.startsWith('ssr://')) node = parseSSR(line);
@@ -219,7 +259,7 @@ export function parseSubscription(content: string, contentType: string): ParseRe
     if (node) nodes.push(node);
   }
 
-  return { nodes };
+  return { nodes, subInfo };
 }
 
 // 解析 Clash YAML (简易解析，提取 proxies 列表)
