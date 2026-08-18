@@ -104,6 +104,7 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   const targetType = TARGET_TYPES[target] || 'clash';
   let allNodes: any[] = [];
   let subInfo: any = undefined;
+  let subTitle: string | undefined = undefined;
 
   const urls = subUrl.split('|').filter(u => u.trim());
 
@@ -116,12 +117,20 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
     }
     try {
       const resp = await fetch(trimmed, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        headers: { 'User-Agent': 'clash.meta' },
       });
       const content = await resp.text();
       const result = parseSubscription(content, resp.headers.get('content-type') || '');
       allNodes.push(...result.nodes);
       if (result.subInfo && !subInfo) subInfo = result.subInfo;
+      // 从响应头解析订阅信息（流量、订阅名）
+      const headerSubInfo = parseSubInfo(resp.headers);
+      if (headerSubInfo && !subInfo) subInfo = headerSubInfo;
+      const disposition = resp.headers.get('content-disposition');
+      if (disposition && !subTitle) {
+        const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
+        if (match) subTitle = decodeURIComponent(match[1].replace(/["']/g, ''));
+      }
     } catch {
       // ignore
     }
@@ -176,6 +185,10 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   if (subInfo) {
     responseHeaders['subscription-userinfo'] = `upload=${subInfo.upload}; download=${subInfo.download}; total=${subInfo.total}; expire=${subInfo.expire}`;
   }
+  if (subTitle) {
+    responseHeaders['content-disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(subTitle)}`;
+  }
+  responseHeaders['profile-update-interval'] = '24';
 
   return new Response(finalOutput, { headers: responseHeaders });
 }

@@ -303,6 +303,7 @@ function normalizeClashNode(obj: Record<string, any>): ProxyNode {
     uuid: obj.uuid, alterId: obj.alterId || 0,
     network: obj.network, tls: obj.tls,
     sni: obj.sni || obj.server, host: obj.host, path: obj.path,
+    insecure: obj['skip-cert-verify'] === true,
     flow: obj.flow,
     realityOpts: obj['reality-opts'] || obj.realityOpts,
     alpn: typeof obj.alpn === 'string' ? obj.alpn : undefined,
