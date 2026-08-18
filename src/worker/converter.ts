@@ -89,6 +89,7 @@ export function toClash(nodes: ProxyNode[]): string {
       case 'hysteria2':
         p.password = n.password;
         p.sni = n.sni || n.server;
+        p.tls = true;
         p['skip-cert-verify'] = n.insecure || false;
         p.udp = true;
         break;
