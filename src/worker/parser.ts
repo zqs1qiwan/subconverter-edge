@@ -238,21 +238,21 @@ function parseClashYaml(text: string): ParseResult {
     }
     if (!inProxies) continue;
 
-    if (line.startsWith('- {')) {
+    if (trimmed.startsWith('- {')) {
       // 内联 YAML
       try {
-        const obj = parseInlineYaml(line.slice(2));
-        if (obj.type && obj.server) {
+        const obj = parseInlineYaml(trimmed.slice(2));
+        if (obj.type && obj.server && obj.type !== 'select' && obj.type !== 'url-test' && obj.type !== 'fallback' && obj.type !== 'load-balance') {
           nodes.push(normalizeClashNode(obj));
         }
       } catch { /* skip */ }
       continue;
     }
 
-    if (line.startsWith('- ')) {
+    if (trimmed.startsWith('- ')) {
       if (current) nodes.push(normalizeClashNode(current as any));
       current = {};
-      const rest = line.slice(2).trim();
+      const rest = trimmed.slice(2).trim();
       if (rest.startsWith('{')) {
         try {
           current = parseInlineYaml(rest);
