@@ -364,6 +364,8 @@ function normalizeClashNode(obj: Record<string, any>): ProxyNode {
     flow: obj.flow,
     realityOpts: obj['reality-opts'] || obj.realityOpts,
     alpn: typeof obj.alpn === 'string' ? obj.alpn : undefined,
-    raw: JSON.stringify(obj),
+    // 不设 raw：raw 仅用于 URI 直通（ss:// 等原样保留）。
+    // Clash YAML 节点没有 URI 形态，若填 JSON 会被 toMixed/toV2Ray 当作 URI 直推，
+    // 导致 v2ray/shadowrocket 输出 JSON lines 而非 URI 列表，客户端无法解析。
   };
 }
