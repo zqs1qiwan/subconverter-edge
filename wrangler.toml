@@ -16,3 +16,9 @@ id = "REPLACE_WITH_YOUR_KV_ID"
 [observability]
 enabled = true
 head_sampling_rate = 1
+
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
