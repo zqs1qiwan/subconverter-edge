@@ -21,6 +21,8 @@ export interface ProxyNode {
     shortId: string;
     spiderX: string;
   };
+  // gRPC (Clash yaml grpc-opts)
+  serviceName?: string;
   // Trojan
   sni2?: string;
   //通用

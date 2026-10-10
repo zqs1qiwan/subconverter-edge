@@ -67,6 +67,9 @@ export function toClash(nodes: ProxyNode[]): string {
         if (n.network === 'ws') {
           p['ws-opts'] = { path: n.path || '/', headers: { Host: n.host || n.server } };
         }
+        if (n.network === 'grpc' && n.serviceName) {
+          p['grpc-opts'] = { 'grpc-service-name': n.serviceName };
+        }
         p.udp = true;
         break;
       case 'trojan':
@@ -213,6 +216,7 @@ export function toV2Ray(nodes: ProxyNode[]): string {
         if (n.realityOpts) { params.set('pbk', n.realityOpts.publicKey); params.set('sid', n.realityOpts.shortId); }
         if (n.path) params.set('path', n.path);
         if (n.host) params.set('host', n.host);
+        if (n.network === 'grpc' && n.serviceName) params.set('serviceName', n.serviceName);
         lines.push(`vless://${n.uuid}@${n.server}:${n.port}?${params.toString()}#${encodeURIComponent(n.name)}`);
         break;
       }
@@ -283,6 +287,7 @@ export function toMixed(nodes: ProxyNode[]): string {
         if (n.realityOpts) { params.set('pbk', n.realityOpts.publicKey); params.set('sid', n.realityOpts.shortId); }
         if (n.path) params.set('path', n.path);
         if (n.host) params.set('host', n.host);
+        if (n.network === 'grpc' && n.serviceName) params.set('serviceName', n.serviceName);
         lines.push(`vless://${n.uuid}@${n.server}:${n.port}?${params.toString()}#${encodeURIComponent(n.name)}`);
         break;
       }

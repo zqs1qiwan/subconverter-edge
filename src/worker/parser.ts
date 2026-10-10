@@ -1,3 +1,4 @@
+import { parse as parseYaml } from 'yaml';
 import type { ProxyNode, ParseResult, SubscriptionInfo } from './types';
 
 // Base64 解码
@@ -265,54 +266,26 @@ export function parseSubscription(content: string, contentType: string): ParseRe
   return { nodes, subInfo };
 }
 
-// 解析 Clash YAML (简易解析，提取 proxies 列表)
+// 解析 Clash YAML
+// 使用 yaml 库完整解析，兼容所有机场写法（内联/块式/单行逗号/嵌套）。
+// 只提取 proxies 列表，过滤掉 proxy-group 类型节点。
+const GROUP_TYPES = new Set(['select', 'url-test', 'fallback', 'load-balance', 'relay', 'smart']);
+
 function parseClashYaml(text: string): ParseResult {
   const nodes: ProxyNode[] = [];
-  // 简易 YAML proxies 解析
-  const lines = text.split('\n');
-  let inProxies = false;
-  let current: Partial<ProxyNode> | null = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed === 'proxies:') { inProxies = true; continue; }
-    if (inProxies && !line.startsWith(' ') && !line.startsWith('-') && trimmed && !trimmed.startsWith('#')) {
-      inProxies = false; continue;
+  try {
+    const doc = parseYaml(text) as any;
+    const proxies = doc?.proxies;
+    if (!Array.isArray(proxies)) return { nodes };
+    for (const obj of proxies) {
+      if (!obj || typeof obj !== 'object') continue;
+      const t = String(obj.type || '').toLowerCase();
+      if (!obj.type || !obj.server || GROUP_TYPES.has(t)) continue;
+      nodes.push(normalizeClashNode(obj));
     }
-    if (!inProxies) continue;
-
-    if (trimmed.startsWith('- {')) {
-      // 内联 YAML
-      try {
-        const obj = parseInlineYaml(trimmed.slice(2));
-        if (obj.type && obj.server && obj.type !== 'select' && obj.type !== 'url-test' && obj.type !== 'fallback' && obj.type !== 'load-balance') {
-          nodes.push(normalizeClashNode(obj));
-        }
-      } catch { /* skip */ }
-      continue;
-    }
-
-    if (trimmed.startsWith('- ')) {
-      if (current) nodes.push(normalizeClashNode(current as any));
-      current = {};
-      const rest = trimmed.slice(2).trim();
-      if (rest.startsWith('{')) {
-        try {
-          current = parseInlineYaml(rest);
-        } catch { /* skip */ }
-      }
-      continue;
-    }
-
-    if (current && trimmed.includes(':')) {
-      const idx = trimmed.indexOf(':');
-      const key = trimmed.slice(0, idx).trim();
-      const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
-      (current as any)[key] = isNaN(Number(val)) ? val : Number(val);
-    }
+  } catch {
+    // YAML 解析失败，返回空
   }
-  if (current) nodes.push(normalizeClashNode(current as any));
-
   return { nodes };
 }
 
@@ -351,6 +324,17 @@ function parseInlineYaml(str: string): Record<string, any> {
 }
 
 function normalizeClashNode(obj: Record<string, any>): ProxyNode {
+  // ws/grpc 传输层嵌套结构展开（机场主流写法）
+  const wsOpts = obj['ws-opts'] || {};
+  const grpcOpts = obj['grpc-opts'] || {};
+  const h2Opts = obj['h2-opts'] || {};
+  const wsHeaders = wsOpts.headers || h2Opts.headers || {};
+  const host = obj.host || wsHeaders.Host || wsHeaders.host || '';
+  const path = obj.path || wsOpts.path || h2Opts.path || '';
+  const network = obj.network
+    || (grpcOpts['grpc-service-name'] ? 'grpc' : '')
+    || (wsOpts.path ? 'ws' : '')
+    || '';
   return {
     type: obj.type || 'unknown',
     name: obj.name || 'Unnamed',
@@ -358,10 +342,11 @@ function normalizeClashNode(obj: Record<string, any>): ProxyNode {
     port: parseInt(obj.port, 10) || 0,
     cipher: obj.cipher, password: obj.password,
     uuid: obj.uuid, alterId: obj.alterId || 0,
-    network: obj.network, tls: obj.tls,
-    sni: obj.sni || obj.server, host: obj.host, path: obj.path,
+    network, tls: obj.tls,
+    sni: obj.sni || obj.servername || obj.server, host, path,
     insecure: obj['skip-cert-verify'] === true,
     flow: obj.flow,
+    serviceName: grpcOpts['grpc-service-name'] || undefined,
     realityOpts: obj['reality-opts'] || obj.realityOpts,
     alpn: typeof obj.alpn === 'string' ? obj.alpn : undefined,
     // 不设 raw：raw 仅用于 URI 直通（ss:// 等原样保留）。

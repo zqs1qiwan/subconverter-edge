@@ -25,16 +25,23 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers': '*',
 };
 
-// 机场常见广告/信息节点名称关键词（剩余流量、到期时间、官网、公告、URL 塞名等）
-// 覆盖测试基准：69 云订阅 73 节点，7 个广告节点全命中、63 个真实节点零误杀
+// 机场广告/信息节点识别（参考社区标准：Clash Verge Rev / Loon 社区配置 / Sub-Store）
+// 设计原则：结构性匹配而非单字匹配，避免误杀真实节点
+//   - 单字如「群」「更新」在真实节点名中常见（香港IPLC群、Netflix更新解锁），不能单独用作关键词
+//   - 改用组合词、域名结构、URL特征等高准确度模式；覆盖不了的由用户 filter 正则兜底
 const AD_PATTERNS: RegExp[] = [
-  /剩余|流量|到期|过期|expire|traffic/i,
-  /官网|网站|网址|主页|homepage|website/i,
+  // 1. 流量/到期/套餐信息（社区通用词）
+  /剩余|到期|过期|重置|套餐|expire|expiry|reset|traffic/i,
+  // 2. 节点名包含 URL 一定是非真实节点
   /https?:\/\//,
-  /提示|公告|通知|notice|announcement/i,
-  /套餐|重置|失联|subscription|reset/i,
-  /t\.me|tg群|电报群/i,
-  /(国内|永久|备用|官网|主页)[:：]\s*\S+\.(com|net|org|top|cc|xyz|me|io|app|dev|site)/i,
+  // 3. 冒号+域名结构（官方:xxx.com / 永久:xxx.com / 备用:xxx.com）
+  /(官方|官网|主页|网站|网址|发布页|永久|备用|国内|国外|入口|购买|客服|群组|main|backup|portal)[:：]\s*\S+\.\w+/i,
+  // 4. 引导语组合词（多字组合避免单字误杀）
+  /加群|进群|入群|交流群|电报群|tg群|点击订阅|查看官网|访问官网|前往官网|点击下载|下载客户端|使用客户端|查看公告|最新通知|重要通知|更新公告|请到|请访问|请使用|请前往|详见|查看详情/i,
+  // 5. 英文引导组合
+  /join\s*(us|group|telegram)|visit\s*(our\s*)?(site|website|homepage)|t\.me\/|telegram\.me|telegram\.dog|download\s*(the\s*)?(app|client)/i,
+  // 6. 信息标记 emoji 开头（🔔📢⚠️💡⏰💬 等是信息节点特征，国旗/音乐类emoji除外）
+  /^\s*[^\p{L}\p{N}\s]*[🔔📢⚠💡⏰🗑💬📄🧾❗]/u,
 ];
 
 // 可选 User-Agent 列表，用于请求上游订阅
