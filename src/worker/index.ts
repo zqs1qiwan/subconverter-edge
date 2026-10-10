@@ -203,7 +203,7 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
 
   if (emoji) {
     allNodes = allNodes.map(n => {
-      if (!n.name.match(/[\u{1F300}-\u{1F9FF}]/u)) {
+      if (!n.name.match(/[\u{1F300}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}]/u)) {
         n.name = addEmoji(n.name);
       }
       return n;
