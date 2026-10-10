@@ -92,6 +92,8 @@ GET /sub?target=<target>&url=<subscription_url>
 | `emoji` | 否 | 默认 `true`，设 `false` 关闭国旗 |
 | `include` | 否 | 只保留指定类型，如 `ss,vmess` |
 | `exclude` | 否 | 排除指定类型，如 `ssr` |
+| `ads` | 否 | 设 `1` 启用内置广告节点过滤（按名称匹配：剩余流量/到期时间/官网/公告/URL 等） |
+| `filter` | 否 | 自定义节点名称过滤正则，命中的节点被剔除，如 `剩余|到期` |
 | `config` | 否 | 远程配置 ID，如 `clash-ruleset-a` |
 
 ### 短链接
@@ -249,6 +251,8 @@ GET /sub?target=<target>&url=<subscription_url>
 | `emoji` | no | `true` by default |
 | `include` | no | Keep only specified types, e.g. `ss,vmess` |
 | `exclude` | no | Drop specified types, e.g. `ssr` |
+| `ads` | no | Set `1` to enable built-in ad-node filtering (by name: traffic/expiry/URL announcements) |
+| `filter` | no | Custom node-name regex; matched nodes are dropped, e.g. `remaining|expiry` |
 | `config` | no | Remote config ID, e.g. `clash-ruleset-a` |
 
 ### Short link

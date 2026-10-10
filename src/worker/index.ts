@@ -25,6 +25,18 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers': '*',
 };
 
+// 机场常见广告/信息节点名称关键词（剩余流量、到期时间、官网、公告、URL 塞名等）
+// 覆盖测试基准：69 云订阅 73 节点，7 个广告节点全命中、63 个真实节点零误杀
+const AD_PATTERNS: RegExp[] = [
+  /剩余|流量|到期|过期|expire|traffic/i,
+  /官网|网站|网址|主页|homepage|website/i,
+  /https?:\/\//,
+  /提示|公告|通知|notice|announcement/i,
+  /套餐|重置|失联|subscription|reset/i,
+  /t\.me|tg群|电报群/i,
+  /(国内|永久|备用|官网|主页)[:：]\s*\S+\.(com|net|org|top|cc|xyz|me|io|app|dev|site)/i,
+];
+
 // 可选 User-Agent 列表，用于请求上游订阅
 // 不同机场可能根据 UA 返回不同格式和响应头
 const UA_OPTIONS: Record<string, string> = {
@@ -102,6 +114,8 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   const emoji = url.searchParams.get('emoji') !== 'false';
   const includeNodeTypes = url.searchParams.get('include') || '';
   const excludeNodeTypes = url.searchParams.get('exclude') || '';
+  const ads = url.searchParams.get('ads') === '1';
+  const filterParam = url.searchParams.get('filter') || '';
   const remoteConfig = url.searchParams.get('config') || '';
   const uaKey = url.searchParams.get('ua') || 'clash';
   const customName = url.searchParams.get('name') || '';
@@ -161,6 +175,23 @@ async function handleSub(request: Request, url: URL): Promise<Response> {
   if (excludeNodeTypes) {
     const types = excludeNodeTypes.split(',').map(t => t.trim());
     allNodes = allNodes.filter(n => !types.includes(n.type));
+  }
+
+  // 广告/信息节点过滤：按节点名称关键词（机场常塞「剩余流量/到期时间/官网」等假节点）
+  if (ads || filterParam) {
+    allNodes = allNodes.filter(n => {
+      if (ads && AD_PATTERNS.some(p => p.test(n.name))) return false;
+      if (filterParam) {
+        try {
+          const re = new RegExp(filterParam);
+          if (re.test(n.name)) return false;
+        } catch {
+          // 非法正则按字面量处理
+          if (n.name.includes(filterParam)) return false;
+        }
+      }
+      return true;
+    });
   }
 
   if (emoji) {

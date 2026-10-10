@@ -51,6 +51,8 @@ export default function App() {
   const [remoteConfig, setRemoteConfig] = useState('');
   const [ua, setUa] = useState('clash');
   const [subName, setSubName] = useState('');
+  const [ads, setAds] = useState(false);
+  const [filter, setFilter] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -73,6 +75,8 @@ export default function App() {
     if (params.get('config')) setRemoteConfig(params.get('config')!);
     if (params.get('ua')) setUa(params.get('ua')!);
     if (params.get('name')) setSubName(params.get('name')!);
+    if (params.get('ads') === '1') setAds(true);
+    if (params.get('filter')) setFilter(params.get('filter')!);
   }, []);
 
   const buildUrl = useCallback(() => {
@@ -88,9 +92,11 @@ export default function App() {
     if (remoteConfig) params.set('config', remoteConfig);
     if (ua !== 'clash') params.set('ua', ua);
     if (subName.trim()) params.set('name', subName.trim());
+    if (ads) params.set('ads', '1');
+    if (filter.trim()) params.set('filter', filter.trim());
 
     return `${backend || window.location.origin}/sub?${params.toString()}`;
-  }, [subUrl, target, backend, emoji, include, exclude, remoteConfig, ua, subName]);
+  }, [subUrl, target, backend, emoji, include, exclude, remoteConfig, ua, subName, ads, filter]);
 
   const resetResult = () => {
     setGeneratedUrl('');
@@ -264,6 +270,13 @@ export default function App() {
                 </div>
               </div>
 
+              {/* 名称过滤（正则，剔除广告/信息节点） */}
+              <div className="field-group">
+                <label className="field-label" htmlFor="namefilter">名称过滤（正则）</label>
+                <Input id="namefilter" value={filter} onChange={(e: any) => { setFilter(e.target.value); resetResult(); }} placeholder="剩余|到期|官网" />
+                <p className="field-hint">按节点名称正则匹配并剔除，可搭配「去除广告节点」使用</p>
+              </div>
+
               {/* 订阅名称 */}
               <div className="field-group">
                 <label className="field-label" htmlFor="subname">订阅名称</label>
@@ -282,8 +295,9 @@ export default function App() {
                 <p className="field-hint">影响上游订阅返回的格式和响应头，默认 Clash 兼容</p>
               </div>
 
-              {/* Emoji */}
+              {/* 广告过滤 + Emoji */}
               <div className="options-row">
+                <Checkbox checked={ads} onCheckedChange={(checked: boolean) => { setAds(!!checked); resetResult(); }} label="去除广告节点" />
                 <Checkbox checked={emoji} onCheckedChange={(checked: boolean) => { setEmoji(!!checked); resetResult(); }} label="Emoji 国旗" />
               </div>
             </div>
