@@ -231,7 +231,7 @@ export default function App() {
 
       <section className="hero-panel">
         <div className="hero-copy">
-          <Text variant="heading1" as="h1">SubconverterEdge</Text>
+          <Text variant="heading1" as="h1">Subconverter → <span className="accent">Edge</span></Text>
           <Text variant="secondary" size="sm" as="p" DANGEROUS_className="hero-subtitle">
             在线订阅转换 · 支持多客户端格式 · 一键生成订阅地址和二维码
           </Text>

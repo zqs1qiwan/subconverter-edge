@@ -106,8 +106,17 @@ body::before {
 
 .hero-copy h1 {
   margin: 0;
-  letter-spacing: -0.045em;
+  font-size: clamp(28px, 5vw, 44px);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
   color: var(--text);
+}
+.hero-copy h1 .accent {
+  background: linear-gradient(135deg, #8b93ff, #c084fc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .hero-subtitle {
@@ -270,9 +279,19 @@ body::before {
 
 .options-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 10px 20px;
   min-height: 24px;
   color: var(--muted);
+}
+.options-row > * {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.options-row label {
+  white-space: nowrap;
+  font-size: 14px;
 }
 
 /* ── Action buttons (native, not Kumo) ── */
