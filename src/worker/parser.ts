@@ -168,25 +168,28 @@ function parseTrojan(uri: string): ProxyNode | null {
   }
 }
 
-// Hysteria2 URI: hysteria2://password@server:port?params#name
-function parseHysteria2(uri: string): ProxyNode | null {
+// Hysteria2 / AnyTLS URI
+function parseHysteria2(uri: string, scheme = 'hysteria2'): ProxyNode | null {
   try {
     const u = new URL(uri);
     const name = decodeURIComponent(u.hash.slice(1)) || 'Hysteria2';
     const params = u.searchParams;
     return {
-      type: 'hysteria2', name, server: u.hostname, port: parseInt(u.port, 10),
-      password: u.username,
+      type: scheme, name, server: u.hostname, port: parseInt(u.port, 10),
+      password: decodeURIComponent(u.username),
       tls: true,
       sni: params.get('sni') || u.hostname,
       host: params.get('host') || '',
-      insecure: params.get('insecure') === '1',
+      insecure: params.get('insecure') === '1' || params.get('allowInsecure') === '1',
+      obfs: params.get('obfs') || undefined,
+      mport: params.get('mport') || undefined,
+      alpn: params.get('alpn') || undefined,
+      fingerprint: params.get('fp') || undefined,
       raw: uri,
     };
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
+function parseAnyTLS(uri: string): ProxyNode | null { return parseHysteria2(uri, 'anytls'); }
 
 // 解析 Shadowrocket STATUS= 行
 // 格式: 🚀↑:0.07GB,↓:6.11GB,TOT:800GB💡Expires:2027-07-10
@@ -260,6 +263,7 @@ export function parseSubscription(content: string, contentType: string): ParseRe
     else if (line.startsWith('vless://')) node = parseVLESS(line);
     else if (line.startsWith('trojan://')) node = parseTrojan(line);
     else if (line.startsWith('hysteria2://') || line.startsWith('hy2://')) node = parseHysteria2(line);
+    else if (line.startsWith('anytls://')) node = parseAnyTLS(line);
     if (node) nodes.push(node);
   }
 
@@ -324,19 +328,21 @@ function parseInlineYaml(str: string): Record<string, any> {
 }
 
 function normalizeClashNode(obj: Record<string, any>): ProxyNode {
-  // ws/grpc 传输层嵌套结构展开（机场主流写法）
   const wsOpts = obj['ws-opts'] || {};
   const grpcOpts = obj['grpc-opts'] || {};
   const h2Opts = obj['h2-opts'] || {};
   const wsHeaders = wsOpts.headers || h2Opts.headers || {};
   const host = obj.host || wsHeaders.Host || wsHeaders.host || '';
   const path = obj.path || wsOpts.path || h2Opts.path || '';
-  const network = obj.network
-    || (grpcOpts['grpc-service-name'] ? 'grpc' : '')
-    || (wsOpts.path ? 'ws' : '')
-    || '';
+  const network = obj.network || (grpcOpts['grpc-service-name'] ? 'grpc' : '') || (wsOpts.path ? 'ws' : '') || '';
+  const ro = obj['reality-opts'] || obj.realityOpts || (obj.reality && obj.reality.enabled ? obj.reality : undefined);
+  const realityOpts = ro ? { publicKey: ro['public-key'] || ro.publicKey || ro.public_key || '', shortId: ro['short-id'] || ro.shortId || ro.short_id || '', spiderX: ro['spider-x'] || ro.spiderX || ro.spider_x || ro.spx || '' } : undefined;
+  const alpn = Array.isArray(obj.alpn) ? obj.alpn.join(',') : (typeof obj.alpn === 'string' ? obj.alpn : undefined);
+  // Preserve original Clash fields for lossless clash round-trip (password/sni/ports/up/down/udp etc for anytls/hysteria2/http/socks5/tuic/wireguard...)
+  const extra: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) { if (!['name','type','server','port'].includes(k)) extra[k] = v; }
   return {
-    type: obj.type || 'unknown',
+    type: String(obj.type || 'unknown').toLowerCase(),
     name: obj.name || 'Unnamed',
     server: obj.server || '',
     port: parseInt(obj.port, 10) || 0,
@@ -346,11 +352,14 @@ function normalizeClashNode(obj: Record<string, any>): ProxyNode {
     sni: obj.sni || obj.servername || obj.server, host, path,
     insecure: obj['skip-cert-verify'] === true,
     flow: obj.flow,
-    serviceName: grpcOpts['grpc-service-name'] || undefined,
-    realityOpts: obj['reality-opts'] || obj.realityOpts,
-    alpn: typeof obj.alpn === 'string' ? obj.alpn : undefined,
-    // 不设 raw：raw 仅用于 URI 直通（ss:// 等原样保留）。
-    // Clash YAML 节点没有 URI 形态，若填 JSON 会被 toMixed/toV2Ray 当作 URI 直推，
-    // 导致 v2ray/shadowrocket 输出 JSON lines 而非 URI 列表，客户端无法解析。
+    serviceName: grpcOpts['grpc-service-name'] || grpcOpts.serviceName || undefined,
+    realityOpts,
+    alpn,
+    fingerprint: obj.fingerprint || obj.clientFingerprint || undefined,
+    obfs: obj.obfs || undefined,
+    mport: obj.mport || undefined,
+    ports: obj.ports || undefined,
+    up: obj.up, down: obj.down,
+    extra,
   };
 }

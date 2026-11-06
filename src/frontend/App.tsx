@@ -53,6 +53,16 @@ export default function App() {
   const [subName, setSubName] = useState('');
   const [ads, setAds] = useState(false);
   const [filter, setFilter] = useState('');
+  const [rename, setRename] = useState('');
+  const [sortNodes, setSortNodes] = useState(false);
+  const [udp, setUdp] = useState(true);
+  const [scv, setScv] = useState(false);
+  const [diydns, setDiydns] = useState(false);
+  const [appendType, setAppendType] = useState(false);
+  const [listPlain, setListPlain] = useState(false);
+  const [tls13, setTls13] = useState(false);
+  const [diyua, setDiyua] = useState('');
+  const [intervalDays, setIntervalDays] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -77,6 +87,17 @@ export default function App() {
     if (params.get('name')) setSubName(params.get('name')!);
     if (params.get('ads') === '1') setAds(true);
     if (params.get('filter')) setFilter(params.get('filter')!);
+    if (params.get('rename')) setRename(params.get('rename')!);
+    if (params.get('sort') === 'true') setSortNodes(true);
+    if (params.get('udp') === 'false') setUdp(false);
+    if (params.get('scv') === 'true') setScv(true);
+    if (params.get('diydns') === 'true') setDiydns(true);
+    if (params.get('append_type') === 'true') setAppendType(true);
+    if (params.get('list') === 'true') setListPlain(true);
+    if (params.get('tls13') === 'true') setTls13(true);
+    if (params.get('diyua')) setDiyua(params.get('diyua')!);
+    if (params.get('interval')) setIntervalDays(String(Math.ceil(parseInt(params.get('interval')!, 10) / 86400)));
+    if (params.get('filename')) setSubName(params.get('filename')!);
   }, []);
 
   const buildUrl = useCallback(() => {
@@ -94,9 +115,20 @@ export default function App() {
     if (subName.trim()) params.set('name', subName.trim());
     if (ads) params.set('ads', '1');
     if (filter.trim()) params.set('filter', filter.trim());
+    if (rename.trim()) params.set('rename', rename.trim());
+    if (sortNodes) params.set('sort', 'true');
+    if (!udp) params.set('udp', 'false');
+    if (scv) params.set('scv', 'true');
+    if (diydns) params.set('diydns', 'true');
+    if (appendType) params.set('append_type', 'true');
+    if (listPlain) params.set('list', 'true');
+    if (tls13) params.set('tls13', 'true');
+    if (diyua.trim()) params.set('diyua', diyua.trim());
+    if (intervalDays.trim() && !isNaN(parseInt(intervalDays, 10))) params.set('interval', String(parseInt(intervalDays, 10) * 86400));
+    if (subName.trim()) params.set('filename', subName.trim());
 
     return `${backend || window.location.origin}/sub?${params.toString()}`;
-  }, [subUrl, target, backend, emoji, include, exclude, remoteConfig, ua, subName, ads, filter]);
+  }, [subUrl, target, backend, emoji, include, exclude, remoteConfig, ua, subName, ads, filter, rename, sortNodes, udp, scv, diydns, appendType, listPlain, tls13, diyua, intervalDays]);
 
   const resetResult = () => {
     setGeneratedUrl('');
@@ -299,6 +331,28 @@ export default function App() {
               <div className="options-row">
                 <Checkbox checked={ads} onCheckedChange={(checked: boolean) => { setAds(!!checked); resetResult(); }} label="去除广告节点" />
                 <Checkbox checked={emoji} onCheckedChange={(checked: boolean) => { setEmoji(!!checked); resetResult(); }} label="Emoji 国旗" />
+                <Checkbox checked={sortNodes} onCheckedChange={(checked: boolean) => { setSortNodes(!!checked); resetResult(); }} label="排序节点" />
+                <Checkbox checked={udp} onCheckedChange={(checked: boolean) => { setUdp(!!checked); resetResult(); }} label="UDP" />
+                <Checkbox checked={scv} onCheckedChange={(checked: boolean) => { setScv(!!checked); resetResult(); }} label="跳过证书验证" />
+                <Checkbox checked={diydns} onCheckedChange={(checked: boolean) => { setDiydns(!!checked); resetResult(); }} label="私有 DNS" />
+                <Checkbox checked={appendType} onCheckedChange={(checked: boolean) => { setAppendType(!!checked); resetResult(); }} label="插入节点类型" />
+                <Checkbox checked={listPlain} onCheckedChange={(checked: boolean) => { setListPlain(!!checked); resetResult(); }} label="明文列表" />
+                <Checkbox checked={tls13} onCheckedChange={(checked: boolean) => { setTls13(!!checked); resetResult(); }} label="TLS 1.3" />
+              </div>
+
+              <div className="field-grid compact-grid">
+                <div className="field-group">
+                  <label className="field-label" htmlFor="rename">节点重命名</label>
+                  <Input id="rename" value={rename} onChange={(e: any) => { setRename(e.target.value); resetResult(); }} placeholder="旧名=新名，多个用 | 分隔" />
+                </div>
+                <div className="field-group">
+                  <label className="field-label" htmlFor="interval">更新间隔（天）</label>
+                  <Input id="interval" value={intervalDays} onChange={(e: any) => { setIntervalDays(e.target.value); resetResult(); }} placeholder="例如 1" />
+                </div>
+              </div>
+              <div className="field-group">
+                <label className="field-label" htmlFor="diyua">自定义 UA</label>
+                <Input id="diyua" value={diyua} onChange={(e: any) => { setDiyua(e.target.value); resetResult(); }} placeholder="留空使用上方 UA" />
               </div>
             </div>
           )}

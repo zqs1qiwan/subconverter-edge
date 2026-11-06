@@ -6,7 +6,7 @@ Cloudflare Workers 订阅转换服务，前端使用 React + Kumo，后端在同
 
 ## 功能
 
-- 解析 SS / SSR / VMess / VLESS / Trojan / Hysteria2 / Clash YAML 订阅
+- 解析 SS / SSR / VMess / VLESS / Trojan / Hysteria2 / AnyTLS / Clash YAML 订阅
 - 转换为 Clash / Sing-Box / Shadowrocket / V2Ray / Trojan / Shadowsocks / Mixed 格式
 - 生成订阅链接和二维码（移动端可扫码导入）
 - 远程配置选择（ACL4SSR 规则模板，仅 Clash）
@@ -94,7 +94,19 @@ GET /sub?target=<target>&url=<subscription_url>
 | `exclude` | 否 | 排除指定类型，如 `ssr` |
 | `ads` | 否 | 设 `1` 启用内置广告节点过滤（按名称匹配：剩余流量/到期时间/官网/公告/URL 等） |
 | `filter` | 否 | 自定义节点名称过滤正则，命中的节点被剔除，如 `剩余|到期` |
-| `config` | 否 | 远程配置 ID，如 `clash-ruleset-a` |
+| `config` | 否 | 远程配置 ID（如 `clash-ruleset-a`）或完整 URL，Clash 时结构化合入 ACL4SSR 规则 |
+| `rename` | 否 | 节点重命名，格式 `旧名=新名` 多个用 `\|` 分隔 |
+| `sort` | 否 | `true` 按名称排序 |
+| `udp` / `xudp` / `tfo` / `tls13` | 否 | UDP/XUDP/TFO/TLS1.3 标记 |
+| `scv` | 否 | `true` 跳过证书验证 |
+| `diydns` / `fdn` / `clash.doh` | 否 | 私有 DNS / Fake-IP DNS / DoH（Clash 输出注入 dns 段） |
+| `append_type` | 否 | `true` 名称追加节点类型 |
+| `list` | 否 | `true` 返回明文 URI 列表（不 base64） |
+| `insert` / `insert_url` | 否 | 插入默认订阅节点 |
+| `diyua` | 否 | 自定义上游 UA（优先于 `ua`） |
+| `filename` | 否 | 订阅文件名（别名 `name`） |
+| `interval` | 否 | 更新间隔（秒） |
+| `singbox.ipv6` | 否 | Sing-Box 输出开启 IPv6 DNS |
 
 ### 短链接
 
@@ -165,7 +177,7 @@ Cloudflare Workers subscription converter with a React + Kumo frontend and backe
 
 ## Features
 
-- Parse SS / SSR / VMess / VLESS / Trojan / Hysteria2 / Clash YAML subscriptions
+- Parse SS / SSR / VMess / VLESS / Trojan / Hysteria2 / AnyTLS / Clash YAML subscriptions
 - Convert to Clash / Sing-Box / Shadowrocket / V2Ray / Trojan / Shadowsocks / Mixed
 - Generate subscription URL and QR code (scan import for mobile clients)
 - Remote config selection (ACL4SSR rule templates, Clash only)
@@ -253,7 +265,19 @@ GET /sub?target=<target>&url=<subscription_url>
 | `exclude` | no | Drop specified types, e.g. `ssr` |
 | `ads` | no | Set `1` to enable built-in ad-node filtering (by name: traffic/expiry/URL announcements) |
 | `filter` | no | Custom node-name regex; matched nodes are dropped, e.g. `remaining|expiry` |
-| `config` | no | Remote config ID, e.g. `clash-ruleset-a` |
+| `config` | no | Remote config ID (e.g. `clash-ruleset-a`) or full URL; for Clash, ACL4SSR rules are structurally merged |
+| `rename` | no | Rename nodes, `old=new` separated by `\|` |
+| `sort` | no | `true` sorts by name |
+| `udp` / `xudp` / `tfo` / `tls13` | no | UDP/XUDP/TFO/TLS1.3 flags |
+| `scv` | no | `true` skips cert verification |
+| `diydns` / `fdn` / `clash.doh` | no | Private DNS / Fake-IP DNS / DoH |
+| `append_type` | no | `true` appends node type to name |
+| `list` | no | `true` returns plain-text URI list (no base64) |
+| `insert` / `insert_url` | no | Insert default subscription nodes |
+| `diyua` | no | Custom upstream UA (overrides `ua`) |
+| `filename` | no | Subscription filename (alias `name`) |
+| `interval` | no | Update interval in seconds |
+| `singbox.ipv6` | no | Sing-Box IPv6 DNS |
 
 ### Short link
 

@@ -1,60 +1,29 @@
 import { parseSubscription, parseSubInfo } from './parser';
 import { convert } from './converter';
-import type { TargetType } from './types';
+import type { TargetType, ConvertOptions, ProxyNode } from './types';
 
-export interface Env {
-  ASSETS: Fetcher;
-  SHORT_LINKS: KVNamespace;
-}
+export interface Env { ASSETS: Fetcher; SHORT_LINKS: KVNamespace }
 
+const VERSION = 'subconverter-edge v1.2.0';
 const TARGET_TYPES: Record<string, TargetType> = {
-  clash: 'clash',
-  singbox: 'singbox',
-  'sing-box': 'singbox',
-  v2ray: 'v2ray',
-  trojan: 'trojan',
-  ss: 'ss',
-  mixed: 'mixed',
-  shadowrocket: 'shadowrocket',
-  sr: 'shadowrocket',
+  clash: 'clash', singbox: 'singbox', 'sing-box': 'singbox', v2ray: 'v2ray',
+  trojan: 'trojan', ss: 'ss', mixed: 'mixed', shadowrocket: 'shadowrocket', sr: 'shadowrocket',
 };
-
 const CORS_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': '*',
+  'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': '*',
 };
-
-// 机场广告/信息节点识别（参考社区标准：Clash Verge Rev / Loon 社区配置 / Sub-Store）
-// 设计原则：结构性匹配而非单字匹配，避免误杀真实节点
-//   - 单字如「群」「更新」在真实节点名中常见（香港IPLC群、Netflix更新解锁），不能单独用作关键词
-//   - 改用组合词、域名结构、URL特征等高准确度模式；覆盖不了的由用户 filter 正则兜底
 const AD_PATTERNS: RegExp[] = [
-  // 1. 流量/到期/套餐信息（社区通用词）
   /剩余|到期|过期|重置|套餐|expire|expiry|reset|traffic/i,
-  // 2. 节点名包含 URL 一定是非真实节点
   /https?:\/\//,
-  // 3. 冒号+域名结构（官方:xxx.com / 永久:xxx.com / 备用:xxx.com）
   /(官方|官网|主页|网站|网址|发布页|永久|备用|国内|国外|入口|购买|客服|群组|main|backup|portal)[:：]\s*\S+\.\w+/i,
-  // 4. 引导语组合词（多字组合避免单字误杀）
   /加群|进群|入群|交流群|电报群|tg群|点击订阅|查看官网|访问官网|前往官网|点击下载|下载客户端|使用客户端|查看公告|最新通知|重要通知|更新公告|请到|请访问|请使用|请前往|详见|查看详情/i,
-  // 5. 英文引导组合
   /join\s*(us|group|telegram)|visit\s*(our\s*)?(site|website|homepage)|t\.me\/|telegram\.me|telegram\.dog|download\s*(the\s*)?(app|client)/i,
-  // 6. 信息标记 emoji 开头（🔔📢⚠️💡⏰💬 等是信息节点特征，国旗/音乐类emoji除外）
   /^\s*[^\p{L}\p{N}\s]*[🔔📢⚠💡⏰🗑💬📄🧾❗]/u,
 ];
-
-// 可选 User-Agent 列表，用于请求上游订阅
-// 不同机场可能根据 UA 返回不同格式和响应头
 const UA_OPTIONS: Record<string, string> = {
-  clash: 'clash.meta',
-  singbox: 'sing-box',
-  shadowrocket: 'Shadowrocket/1900 CFNetwork/1410 Darwin/22.0.0',
-  v2ray: 'v2rayN',
-  default: 'clash.meta',
+  clash: 'clash.meta/1.19.0', singbox: 'sing-box', shadowrocket: 'Shadowrocket/1900 CFNetwork/1410 Darwin/22.0.0',
+  v2ray: 'v2rayN', default: 'clash.meta/1.19.0',
 };
-
-// 远程配置 URL（Clash/Sing-Box 用户常用的公开配置模板）
 const REMOTE_CONFIGS: Record<string, string> = {
   'default': '',
   'clash-ruleset-a': 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online.ini',
@@ -65,283 +34,343 @@ const REMOTE_CONFIGS: Record<string, string> = {
   'clash-ruleset-f': 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Mini.ini',
   'clash-ruleset-g': 'https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Mini_FalseIP.ini',
 };
+const KNOWN_TYPES = new Set(['ss','ssr','vmess','vless','trojan','hysteria2','hy2','anytls','http','socks5','socks','tuic','wireguard']);
+
+function boolParam(v: string | null, def = false): boolean {
+  if (v === null) return def;
+  return v === 'true' || v === '1';
+}
+function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h === '::1' || h === '0.0.0.0') return true;
+  const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) {
+    const [a,b] = [parseInt(m[1]), parseInt(m[2])];
+    if (a === 10 || a === 127 || a === 0) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 169 && b === 254) return true;
+  }
+  return false;
+}
+async function fetchWithTimeout(url: string, ua: string, timeoutMs = 15000): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try { return await fetch(url, { headers: { 'User-Agent': ua }, signal: ctrl.signal, redirect: 'follow' }); }
+  finally { clearTimeout(t); }
+}
+// include/exclude: dual mode - if all tokens are known types => type filter (back-compat), else keyword regex on name
+function filterByParam(nodes: ProxyNode[], param: string, keep: boolean): ProxyNode[] {
+  const tokens = param.split(',').map(s => s.trim()).filter(Boolean);
+  if (!tokens.length) return nodes;
+  if (tokens.every(t => KNOWN_TYPES.has(t.toLowerCase()))) {
+    const set = new Set(tokens.map(t => t.toLowerCase().replace('hy2','hysteria2')));
+    return nodes.filter(n => keep ? set.has(n.type) : !set.has(n.type));
+  }
+  // keyword mode: tokens joined as regex alternation, also support | inside
+  const pattern = tokens.join('|');
+  let re: RegExp; try { re = new RegExp(pattern, 'i'); } catch { re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); }
+  return nodes.filter(n => keep ? re.test(n.name) : !re.test(n.name));
+}
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS_HEADERS });
-    }
-
-    // API: /sub
-    if (url.pathname === '/sub' || url.pathname === '/sub/') {
-      return handleSub(request, url);
-    }
-
-    // API: /version
-    if (url.pathname === '/version') {
-      return new Response('subconverter-edge v1.1.0', { headers: { 'Content-Type': 'text/plain' } });
-    }
-
-    // API: /api/shorten — 创建短链接（KV 存储，365 天有效）
-    if (url.pathname === '/api/shorten' && request.method === 'POST') {
-      return handleShorten(request, env);
-    }
-
-    // API: /api/configs — 返回远程配置列表
+    if (request.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS });
+    if (url.pathname === '/sub' || url.pathname === '/sub/') return handleSub(request, url);
+    if (url.pathname === '/version') return new Response(VERSION, { headers: { 'Content-Type': 'text/plain' } });
+    if (url.pathname === '/api/shorten' && request.method === 'POST') return handleShorten(request, env);
     if (url.pathname === '/api/configs') {
-      const configs = Object.entries(REMOTE_CONFIGS).filter(([, v]) => v).map(([k, v]) => ({
-        id: k,
-        url: v,
-        name: k.replace('clash-ruleset-', 'ACL4SSR '),
-      }));
-      return new Response(JSON.stringify(configs), {
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-      });
+      const configs = Object.entries(REMOTE_CONFIGS).filter(([, v]) => v).map(([k, v]) => ({ id: k, url: v, name: k.replace('clash-ruleset-', 'ACL4SSR ') }));
+      return new Response(JSON.stringify(configs), { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } });
     }
-
-    // 短链接跳转: /s/<hash> — KV 查询
-    if (url.pathname.startsWith('/s/') && request.method === 'GET') {
-      return handleRedirect(url, env);
-    }
-
-    // 静态资源
-    if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
-    }
-
+    if (url.pathname.startsWith('/s/') && request.method === 'GET') return handleRedirect(url, env);
+    if (env.ASSETS) return env.ASSETS.fetch(request as any);
     return new Response('Not Found', { status: 404 });
   },
 };
 
 async function handleSub(request: Request, url: URL): Promise<Response> {
-  const target = url.searchParams.get('target') || 'clash';
-  const subUrl = url.searchParams.get('url');
-  const emoji = url.searchParams.get('emoji') !== 'false';
-  const includeNodeTypes = url.searchParams.get('include') || '';
-  const excludeNodeTypes = url.searchParams.get('exclude') || '';
-  const ads = url.searchParams.get('ads') === '1';
-  const filterParam = url.searchParams.get('filter') || '';
-  const remoteConfig = url.searchParams.get('config') || '';
-  const uaKey = url.searchParams.get('ua') || 'clash';
-  const customName = url.searchParams.get('name') || '';
-  const userAgent = UA_OPTIONS[uaKey] || UA_OPTIONS['default'];
+  const sp = url.searchParams;
+  const targetRaw = sp.get('target') || 'clash';
+  const targetType = TARGET_TYPES[targetRaw];
+  if (!targetType) return jsonError(`Unsupported target: ${targetRaw}. Supported: ${Object.keys(TARGET_TYPES).join(', ')}`);
+  const subUrl = sp.get('url');
+  if (!subUrl) return jsonError('Missing url parameter');
+  const emoji = sp.get('emoji') !== 'false';
+  const ads = sp.get('ads') === '1' || boolParam(sp.get('ads'));
+  const filterParam = sp.get('filter') || '';
+  const remoteConfig = sp.get('config') || '';
+  const diyua = sp.get('diyua') || '';
+  const uaKey = sp.get('ua') || 'clash';
+  const userAgent = diyua || UA_OPTIONS[uaKey] || UA_OPTIONS['default'];
+  const filename = sp.get('filename') || sp.get('name') || '';
+  const intervalSec = sp.get('interval') ? parseInt(sp.get('interval')!, 10) : NaN;
+  const renameParam = sp.get('rename') || '';
+  const sortBool = boolParam(sp.get('sort'));
+  const listBool = boolParam(sp.get('list') || sp.get('nodeList'));
+  const insertBool = boolParam(sp.get('insert'));
+  const insertUrl = sp.get('insert_url') || '';
+  const opts: ConvertOptions = {
+    udp: sp.get('udp') === null ? undefined : boolParam(sp.get('udp')),
+    xudp: boolParam(sp.get('xudp')),
+    tfo: boolParam(sp.get('tfo')),
+    tls13: boolParam(sp.get('tls13')),
+    scv: boolParam(sp.get('scv')),
+    fdn: boolParam(sp.get('fdn')),
+    diydns: boolParam(sp.get('diydns')),
+    clashDoh: boolParam(sp.get('clash.doh')),
+    singboxIpv6: sp.get('singbox.ipv6') === '1' || boolParam(sp.get('singbox.ipv6')),
+    appendType: boolParam(sp.get('append_type')),
+    newName: boolParam(sp.get('new_name')),
+    group: sp.get('group') || undefined,
+  };
+  // dev_id accepted for compat (no-op in this Worker)
+  void sp.get('dev_id');
 
-  if (!subUrl) {
-    return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
-  }
-
-  const targetType = TARGET_TYPES[target] || 'clash';
-  let allNodes: any[] = [];
+  let allNodes: ProxyNode[] = [];
   let subInfo: any = undefined;
   let subTitle: string | undefined = undefined;
   let profileUpdateInterval: string | undefined = undefined;
+  const errors: string[] = [];
 
-  const urls = subUrl.split('|').filter(u => u.trim());
-
-  for (const u of urls) {
-    const trimmed = u.trim();
-    if (trimmed.startsWith('ss://') || trimmed.startsWith('ssr://') || trimmed.startsWith('vmess://') || trimmed.startsWith('vless://') || trimmed.startsWith('trojan://') || trimmed.startsWith('hysteria2://') || trimmed.startsWith('hy2://')) {
-      const result = parseSubscription(trimmed, 'text/plain');
-      allNodes.push(...result.nodes);
-      continue;
+  const fetchOne = async (rawUrl: string) => {
+    const trimmed = rawUrl.trim();
+    if (!trimmed) return;
+    if (/^(ss|ssr|vmess|vless|trojan|hysteria2|hy2|anytls):\/\//.test(trimmed)) {
+      allNodes.push(...parseSubscription(trimmed, 'text/plain').nodes);
+      return;
     }
+    let parsed: URL;
+    try { parsed = new URL(trimmed); } catch { errors.push('Invalid URL: ' + trimmed.slice(0, 60)); return; }
+    if (!['http:', 'https:'].includes(parsed.protocol)) { errors.push('Unsupported protocol: ' + parsed.protocol); return; }
+    if (isPrivateHost(parsed.hostname)) { errors.push('Blocked private host: ' + parsed.hostname); return; }
     try {
-      const resp = await fetch(trimmed, {
-        headers: { 'User-Agent': userAgent },
-      });
+      const resp = await fetchWithTimeout(trimmed, userAgent);
+      if (!resp.ok) { errors.push(`Upstream ${resp.status} for ${parsed.hostname}`); return; }
       const content = await resp.text();
       const result = parseSubscription(content, resp.headers.get('content-type') || '');
       allNodes.push(...result.nodes);
       if (result.subInfo && !subInfo) subInfo = result.subInfo;
-      // 从响应头解析订阅信息（流量、订阅名）
       const headerSubInfo = parseSubInfo(resp.headers);
       if (headerSubInfo && !subInfo) subInfo = headerSubInfo;
       const disposition = resp.headers.get('content-disposition');
       if (disposition && !subTitle) {
-        const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
-        if (match) subTitle = decodeURIComponent(match[1].replace(/["']/g, ''));
+        const m = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
+        if (m) try { subTitle = decodeURIComponent(m[1].replace(/["']/g, '')); } catch { subTitle = m[1].replace(/["']/g, ''); }
       }
-      if (!profileUpdateInterval) {
-        const interval = resp.headers.get('profile-update-interval');
-        if (interval) profileUpdateInterval = interval;
-      }
-    } catch {
-      // ignore
+      if (!profileUpdateInterval) { const iv = resp.headers.get('profile-update-interval'); if (iv) profileUpdateInterval = iv; }
+    } catch (e: any) {
+      errors.push(`Fetch failed for ${parsed.hostname}: ${e?.name === 'AbortError' ? 'timeout' : e?.message || 'error'}`);
     }
-  }
+  };
 
-  if (includeNodeTypes) {
-    const types = includeNodeTypes.split(',').map(t => t.trim());
-    allNodes = allNodes.filter(n => types.includes(n.type));
-  }
-  if (excludeNodeTypes) {
-    const types = excludeNodeTypes.split(',').map(t => t.trim());
-    allNodes = allNodes.filter(n => !types.includes(n.type));
-  }
+  for (const u of subUrl.split('|')) await fetchOne(u);
+  if (insertBool && insertUrl) for (const u of insertUrl.split('|')) await fetchOne(u);
 
-  // 广告/信息节点过滤：按节点名称关键词（机场常塞「剩余流量/到期时间/官网」等假节点）
+  const includeParam = sp.get('include') || '';
+  const excludeParam = sp.get('exclude') || '';
+  if (includeParam) allNodes = filterByParam(allNodes, includeParam, true);
+  if (excludeParam) allNodes = filterByParam(allNodes, excludeParam, false);
+
   if (ads || filterParam) {
     allNodes = allNodes.filter(n => {
       if (ads && AD_PATTERNS.some(p => p.test(n.name))) return false;
       if (filterParam) {
-        try {
-          const re = new RegExp(filterParam);
-          if (re.test(n.name)) return false;
-        } catch {
-          // 非法正则按字面量处理
-          if (n.name.includes(filterParam)) return false;
-        }
+        try { if (new RegExp(filterParam).test(n.name)) return false; }
+        catch { if (n.name.includes(filterParam)) return false; }
       }
       return true;
     });
   }
-
-  if (emoji) {
-    allNodes = allNodes.map(n => {
-      if (!n.name.match(/[\u{1F300}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}]/u)) {
-        n.name = addEmoji(n.name);
-      }
-      return n;
-    });
-  }
-
-  if (allNodes.length === 0) {
-    return new Response(JSON.stringify({ error: 'No valid nodes found' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
-  }
-
-  const output = convert(allNodes, targetType);
-
-  const responseHeaders: Record<string, string> = {
-    'Content-Type': targetType === 'clash' ? 'text/yaml; charset=utf-8'
-      : targetType === 'singbox' ? 'application/json; charset=utf-8'
-      : 'text/plain; charset=utf-8',
-    ...CORS_HEADERS,
-  };
-
-  // 注入远程配置（仅 Clash target）
-  let finalOutput = output;
-  if (remoteConfig && REMOTE_CONFIGS[remoteConfig] && targetType === 'clash') {
-    try {
-      const configResp = await fetch(REMOTE_CONFIGS[remoteConfig]);
-      const configText = await configResp.text();
-      finalOutput = mergeClashConfig(output, configText);
-    } catch {
-      // 配置拉取失败则用默认输出
+  // rename: old=new|old2=new2 (regex replace on name)
+  if (renameParam) {
+    for (const pair of renameParam.split('|')) {
+      const eq = pair.indexOf('=');
+      if (eq === -1) continue;
+      const oldS = pair.slice(0, eq), newS = pair.slice(eq + 1);
+      if (!oldS) continue;
+      let re: RegExp; try { re = new RegExp(oldS, 'g'); } catch { continue; }
+      allNodes = allNodes.map(n => ({ ...n, name: n.name.replace(re, newS) }));
     }
   }
+  if (opts.appendType) allNodes = allNodes.map(n => ({ ...n, name: `${n.name} [${n.type}]` }));
+  if (sortBool) allNodes = [...allNodes].sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+  if (emoji) {
+    allNodes = allNodes.map(n => ({ ...n, name: n.name.match(/[\u{1F300}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}]/u) ? n.name : addEmoji(n.name) }));
+  }
+  // dedupe by name+server+port+type
+  const seen = new Set<string>(); allNodes = allNodes.filter(n => { const k = `${n.type}|${n.server}|${n.port}|${n.name}`; if (seen.has(k)) return false; seen.add(k); return true; });
 
-  if (subInfo) {
+  if (allNodes.length === 0) {
+    return jsonError(errors.length ? `No valid nodes found (${errors.join('; ')})` : 'No valid nodes found');
+  }
+  if ((targetType === 'ss' || targetType === 'trojan') && !allNodes.some(n => n.type === targetType)) {
+    return jsonError(`No ${targetType} nodes in subscription (found: ${[...new Set(allNodes.map(n => n.type))].join(', ')})`);
+  }
+
+  let output: string;
+  try { output = convert(allNodes, targetType, opts, listBool); }
+  catch (e: any) { return jsonError('Convert failed: ' + (e?.message || 'unknown')); }
+
+  const responseHeaders: Record<string, string> = {
+    'Content-Type': targetType === 'clash' ? 'text/yaml; charset=utf-8' : targetType === 'singbox' ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8',
+    ...CORS_HEADERS,
+  };
+  let finalOutput = output;
+  if (remoteConfig && targetType === 'clash') {
+    const cfgUrl = REMOTE_CONFIGS[remoteConfig] || (/^https?:\/\//.test(remoteConfig) ? remoteConfig : '');
+    if (cfgUrl) {
+      try {
+        const cfgResp = await fetchWithTimeout(cfgUrl, 'clash.meta/1.19.0');
+        if (cfgResp.ok) finalOutput = mergeClashConfig(output, await cfgResp.text(), allNodes.map(n => n.name));
+      } catch { /* fallback to default */ }
+    }
+  }
+  if (subInfo && (subInfo.total > 0 || subInfo.download > 0 || subInfo.upload > 0)) {
     responseHeaders['subscription-userinfo'] = `upload=${subInfo.upload}; download=${subInfo.download}; total=${subInfo.total}; expire=${subInfo.expire}`;
   }
-  if (customName) subTitle = customName;
-  if (subTitle) {
-    responseHeaders['content-disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(subTitle)}`;
-  }
+  if (filename) subTitle = filename;
+  if (subTitle) responseHeaders['content-disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(subTitle)}`;
+  if (!isNaN(intervalSec) && intervalSec > 0) profileUpdateInterval = String(Math.ceil(intervalSec / 3600));
   responseHeaders['profile-update-interval'] = profileUpdateInterval || '24';
-
+  responseHeaders['X-Node-Count'] = String(allNodes.length);
+  if (errors.length) responseHeaders['X-Upstream-Warnings'] = errors.join(' | ').slice(0, 500);
   return new Response(finalOutput, { headers: responseHeaders });
 }
 
-function mergeClashConfig(baseYaml: string, configIni: string): string {
-  // 简单策略：在 Clash YAML 末尾追加 remote config 的规则段
-  // remote config 是 INI 格式的 ACL4SSR 配置模板，不是直接 YAML
-  // 这里不执行完整 subconverter 逻辑，只把 config URL 作为参数注释附在 YAML 顶部
-  const configMarker = `# Remote Config: ${configIni.split('\n')[0] || ''}\n`;
-  return configMarker + baseYaml;
+// Structured ACL4SSR .ini -> Clash rule-providers + proxy-groups + rules
+function mergeClashConfig(baseYaml: string, configIni: string, nodeNames: string[]): string {
+  const rulesets: { group: string; url: string }[] = [];
+  const groups: { name: string; type: string; members: string[]; filter?: string }[] = [];
+  for (const rawLine of configIni.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith(';') || line.startsWith('#')) continue;
+    if (line.startsWith('ruleset=')) {
+      const rest = line.slice('ruleset='.length);
+      const idx = rest.indexOf(',');
+      if (idx > 0) rulesets.push({ group: rest.slice(0, idx).trim(), url: rest.slice(idx + 1).trim() });
+    } else if (line.startsWith('custom_proxy_group=')) {
+      const rest = line.slice('custom_proxy_group='.length);
+      // format: name`type`[]member`[]member`filter
+      const parts = rest.split('`');
+      if (parts.length >= 2) {
+        const name = parts[0].trim();
+        const type = parts[1].trim() || 'select';
+        const members: string[] = []; let filter: string | undefined;
+        for (let i = 2; i < parts.length; i++) {
+          const seg = parts[i].trim();
+          if (seg.startsWith('[]')) members.push(seg.slice(2).trim());
+          else if (seg) filter = seg;
+        }
+        groups.push({ name, type, members, filter });
+      }
+    }
+  }
+  if (!rulesets.length && !groups.length) return baseYaml;
+  // Build proxy-groups: replace filter regex with matching node names; '.*' or empty => all nodes
+  const groupBlocks: string[] = [];
+  for (const g of groups) {
+    const members: string[] = [];
+    for (const m of g.members) {
+      if (m === 'DIRECT' || m === 'REJECT' || m === 'REJECT-DROP') members.push(m);
+      else if (groups.some(x => x.name === m)) members.push(m);
+      else if (nodeNames.includes(m)) members.push(m);
+      else members.push(m); // keep as-is (may be a ruleset group name)
+    }
+    if (g.filter && g.filter !== '.*') {
+      try {
+        const re = new RegExp(g.filter);
+        for (const n of nodeNames) if (re.test(n) && !members.includes(n)) members.push(n);
+      } catch { /* ignore */ }
+    } else if (g.filter === '.*' || !g.filter) {
+      // ACL4SSR '.*' means all nodes available in this group context; include all for select groups that have no explicit nodes
+      if (!members.some(m => nodeNames.includes(m))) for (const n of nodeNames) if (!members.includes(n)) members.push(n);
+    }
+    // dedupe preserve order, quote names with special chars
+    const uniq = [...new Set(members)];
+    const list = uniq.map(m => `  - "${m}"`).join('\n');
+    groupBlocks.push(`- name: "${g.name}"\n  type: ${g.type}\n  proxies:\n${list}`);
+  }
+  // rule-providers: name from group+index (sanitize)
+  const providers: string[] = []; const rules: string[] = [];
+  const usedNames = new Set<string>();
+  rulesets.forEach((r, i) => {
+    let pname = r.group.replace(/[^\p{L}\p{N}_-]+/gu, '_').slice(0, 40) + '_' + i;
+    while (usedNames.has(pname)) pname += '_';
+    usedNames.add(pname);
+    providers.push(`  ${pname}:\n    type: http\n    behavior: classical\n    url: "${r.url}"\n    path: ./ruleset/${pname}.list\n    interval: 86400`);
+    if (r.url.includes('[]GEOIP')) {
+      const geo = r.url.replace('[]GEOIP,', '').trim();
+      rules.push(`  - GEOIP,${geo},"${r.group}"`);
+    } else if (r.url.includes('[]FINAL')) {
+      rules.push(`  - MATCH,"${r.group}"`);
+    } else {
+      rules.push(`  - RULE-SET,${pname},"${r.group}"`);
+    }
+  });
+  // Replace default proxy-groups/rules in baseYaml
+  let head = baseYaml;
+  // Strip existing proxy-groups + rules sections (they are at end in our output)
+  const pgIdx = head.indexOf('\nproxy-groups:');
+  if (pgIdx !== -1) head = head.slice(0, pgIdx);
+  const merged = [
+    head.trimEnd(),
+    '',
+    'proxy-groups:',
+    ...groupBlocks,
+    '',
+    'rule-providers:',
+    ...providers,
+    '',
+    'rules:',
+    ...rules,
+    '',
+  ].join('\n');
+  return merged;
 }
-
-// ── 短链接（KV 存储方案）──
-// 对同一 URL 生成确定性 hash（SHA-256 前 8 位 base36）
-// 存入 KV，365 天有效，到期自动清理
-// 同一订阅链接始终映射到同一个短链接
 
 async function handleShorten(request: Request, env: Env): Promise<Response> {
   try {
     const body = await request.json() as { url: string };
     const targetUrl = body.url;
-    if (!targetUrl || !targetUrl.startsWith('http')) {
-      return jsonError('Invalid URL');
-    }
-
-    // 对 URL 做确定性 hash，同一链接始终得到同一短链
+    if (!targetUrl || !targetUrl.startsWith('http')) return jsonError('Invalid URL');
+    if (targetUrl.length > 8000) return jsonError('URL too long');
     const hash = await deterministicHash(targetUrl);
-
-    // 先查 KV 是否已存在，避免重复写入
+    if (!env.SHORT_LINKS) return jsonError('Short link service unavailable');
     const existing = await env.SHORT_LINKS.get(hash);
-    if (!existing) {
-      await env.SHORT_LINKS.put(hash, targetUrl, { expirationTtl: 31536000 }); // 365 天
-    }
-
+    if (!existing) await env.SHORT_LINKS.put(hash, targetUrl, { expirationTtl: 31536000 });
     const shortUrl = `${new URL(request.url).origin}/s/${hash}`;
-    return new Response(JSON.stringify({ short: shortUrl, hash }), {
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
-  } catch (e: any) {
-    return jsonError(e.message || 'Failed');
-  }
+    return new Response(JSON.stringify({ short: shortUrl, hash }), { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } });
+  } catch (e: any) { return jsonError(e.message || 'Failed'); }
 }
-
 async function handleRedirect(url: URL, env: Env): Promise<Response> {
   const hash = url.pathname.slice(3);
-  if (!hash) return new Response('Not Found', { status: 404 });
-
+  if (!hash) return jsonError('Not Found');
+  if (!env.SHORT_LINKS) return new Response(JSON.stringify({ error: 'Short link service unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } });
   const target = await env.SHORT_LINKS.get(hash);
-  if (!target) return new Response('Not Found', { status: 404 });
-
-  return new Response(null, {
-    status: 302,
-    headers: { Location: target, ...CORS_HEADERS },
-  });
+  if (!target) return jsonError('Not Found');
+  return new Response(null, { status: 302, headers: { Location: target, ...CORS_HEADERS } });
 }
-
 async function deterministicHash(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  // 取前 5 字节 → base36 编码 → 10 位短 hash
   return hashArray.slice(0, 5).map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 10);
 }
-
 function jsonError(msg: string): Response {
-  return new Response(JSON.stringify({ error: msg }), {
-    status: 400,
-    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-  });
+  return new Response(JSON.stringify({ error: msg }), { status: 400, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } });
 }
-
 function addEmoji(name: string): string {
   const emojiMap: [RegExp, string][] = [
-    [/香港|HK|Hong Kong/i, '🇭🇰'],
-    [/台湾|TW|Taiwan/i, '🇹🇼'],
-    [/日本|JP|Japan|东京|大阪/i, '🇯🇵'],
-    [/韩国|KR|Korea|首尔/i, '🇰🇷'],
-    [/新加坡|SG|Singapore|狮城/i, '🇸🇬'],
-    [/美国|US|United States|洛杉矶|硅谷|西雅图/i, '🇺🇸'],
-    [/英国|UK|United Kingdom/i, '🇬🇧'],
-    [/德国|DE|Germany|法兰克福/i, '🇩🇪'],
-    [/法国|FR|France|巴黎/i, '🇫🇷'],
-    [/加拿大|CA|Canada|多伦多/i, '🇨🇦'],
-    [/澳大利亚|AU|Australia|悉尼/i, '🇦🇺'],
-    [/土耳其|TR|Turkey/i, '🇹🇷'],
-    [/印度|IN|India/i, '🇮🇳'],
-    [/俄罗斯|RU|Russia|莫斯科/i, '🇷🇺'],
-    [/巴西|BR|Brazil/i, '🇧🇷'],
-    [/泰国|TH|Thailand/i, '🇹🇭'],
-    [/越南|VN|Vietnam/i, '🇻🇳'],
-    [/菲律宾|PH|Philippines/i, '🇵🇭'],
-    [/印尼|ID|Indonesia/i, '🇮🇩'],
-    [/马来西亚|MY|Malaysia/i, '🇲🇾'],
+    [/香港|HK|Hong Kong/i, '🇭🇰'], [/台湾|TW|Taiwan/i, '🇹🇼'], [/日本|JP|Japan|东京|大阪/i, '🇯🇵'],
+    [/韩国|KR|Korea|首尔/i, '🇰🇷'], [/新加坡|SG|Singapore|狮城/i, '🇸🇬'], [/美国|US|United States|洛杉矶|硅谷|西雅图/i, '🇺🇸'],
+    [/英国|UK|United Kingdom/i, '🇬🇧'], [/德国|DE|Germany|法兰克福/i, '🇩🇪'], [/法国|FR|France|巴黎/i, '🇫🇷'],
+    [/加拿大|CA|Canada|多伦多/i, '🇨🇦'], [/澳大利亚|AU|Australia|悉尼/i, '🇦🇺'], [/土耳其|TR|Turkey/i, '🇹🇷'],
+    [/印度|IN|India/i, '🇮🇳'], [/俄罗斯|RU|Russia|莫斯科/i, '🇷🇺'], [/巴西|BR|Brazil/i, '🇧🇷'],
+    [/泰国|TH|Thailand/i, '🇹🇭'], [/越南|VN|Vietnam/i, '🇻🇳'], [/菲律宾|PH|Philippines/i, '🇵🇭'],
+    [/印尼|ID|Indonesia/i, '🇮🇩'], [/马来西亚|MY|Malaysia/i, '🇲🇾'],
   ];
-  for (const [re, emoji] of emojiMap) {
-    if (re.test(name)) return `${emoji} ${name}`;
-  }
+  for (const [re, emoji] of emojiMap) if (re.test(name)) return `${emoji} ${name}`;
   return name;
 }
